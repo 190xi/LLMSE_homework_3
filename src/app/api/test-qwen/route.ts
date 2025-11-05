@@ -5,7 +5,7 @@ import { callQwenAPI } from '@/lib/qwen';
  * 测试阿里云通义千问API
  * GET /api/test-qwen
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // 测试简单的问答
     const response = await callQwenAPI(
@@ -28,12 +28,12 @@ export async function GET(request: NextRequest) {
       response: response,
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('API test failed:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Unknown error',
+        error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date().toISOString(),
       },
       { status: 500 }

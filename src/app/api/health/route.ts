@@ -12,7 +12,7 @@ export async function GET() {
       uptime: process.uptime(),
       environment: process.env.NODE_ENV,
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       {
         status: 'error',

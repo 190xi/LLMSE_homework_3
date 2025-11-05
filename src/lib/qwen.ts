@@ -10,6 +10,22 @@ interface Message {
   content: string;
 }
 
+interface DayActivity {
+  date: string;
+  morning: string;
+  afternoon: string;
+  evening: string;
+  meals: string;
+  accommodation: string;
+  daily_budget: number;
+}
+
+interface ItineraryData {
+  days: DayActivity[];
+  total_budget: number;
+  tips: string;
+}
+
 /**
  * 创建阿里云通义千问客户端（兼容OpenAI SDK）
  */
@@ -64,7 +80,7 @@ export async function generateItinerary(
   days: number,
   budget: number,
   preferences: string
-): Promise<any> {
+): Promise<ItineraryData> {
   const messages: Message[] = [
     {
       role: 'system',
