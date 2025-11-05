@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "AI 旅行规划师",
-  description: "智能化旅行规划，让出行更简单",
+  title: 'AI 旅行规划师',
+  description: '智能化旅行规划，让出行更简单',
 };
 
 export default function RootLayout({
