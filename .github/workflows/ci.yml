@@ -104,7 +104,6 @@ jobs:
     needs: [lint-and-type-check, build]
     environment:
       name: production-server
-      url: http://${{ secrets.SERVER_HOST }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
