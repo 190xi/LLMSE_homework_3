@@ -120,13 +120,13 @@ jobs:
 
       - name: Copy files to server
         run: |
-          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p /opt/ai-travel-planner"
-          scp -r * ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/ai-travel-planner/
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p ~/deploy/ai-travel-planner"
+          scp -r * ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/deploy/ai-travel-planner/
 
       - name: Deploy application
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            cd /opt/ai-travel-planner
+            cd ~/deploy/ai-travel-planner
             chmod +x deploy.sh
             ./deploy.sh
           EOF

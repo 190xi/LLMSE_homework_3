@@ -39,13 +39,13 @@ sudo usermod -aG docker $USER
 
 ### 3. 服务器环境变量配置
 
-在服务器的 `/opt/ai-travel-planner/.env.production` 文件中配置环境变量:
+在服务器的 `~/deploy/ai-travel-planner/.env.production` 文件中配置环境变量:
 
 ```bash
 # 在服务器上创建目录和配置文件
-sudo mkdir -p /opt/ai-travel-planner
-sudo chown $USER:$USER /opt/ai-travel-planner
-cd /opt/ai-travel-planner
+mkdir -p ~/deploy/ai-travel-planner
+
+cd ~/deploy/ai-travel-planner
 
 # 创建环境变量文件
 cat > .env.production << 'EOF'
@@ -95,16 +95,16 @@ chmod 600 ~/.ssh/authorized_keys
 
 在GitHub仓库中配置以下Secrets (`Settings` → `Secrets and variables` → `Actions` → `New repository secret`):
 
-| Secret名称 | 说明 | 示例 |
-|-----------|------|------|
-| `SSH_PRIVATE_KEY` | 刚才生成的私钥内容 | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
-| `SERVER_HOST` | 服务器IP地址或域名 | `192.168.1.100` 或 `server.example.com` |
-| `SERVER_USER` | SSH登录用户名 | `ubuntu` 或 `root` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase项目URL | `https://xxx.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase匿名密钥 | `eyJhbGc...` |
-| `TEST_DATABASE_URL` | 测试数据库URL (可选) | `postgresql://...` |
-| `TEST_SUPABASE_URL` | 测试环境URL (可选) | `https://...` |
-| `TEST_SUPABASE_ANON_KEY` | 测试环境密钥 (可选) | `eyJhbGc...` |
+| Secret名称                      | 说明                 | 示例                                     |
+| ------------------------------- | -------------------- | ---------------------------------------- |
+| `SSH_PRIVATE_KEY`               | 刚才生成的私钥内容   | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+| `SERVER_HOST`                   | 服务器IP地址或域名   | `192.168.1.100` 或 `server.example.com`  |
+| `SERVER_USER`                   | SSH登录用户名        | `ubuntu` 或 `root`                       |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase项目URL      | `https://xxx.supabase.co`                |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase匿名密钥     | `eyJhbGc...`                             |
+| `TEST_DATABASE_URL`             | 测试数据库URL (可选) | `postgresql://...`                       |
+| `TEST_SUPABASE_URL`             | 测试环境URL (可选)   | `https://...`                            |
+| `TEST_SUPABASE_ANON_KEY`        | 测试环境密钥 (可选)  | `eyJhbGc...`                             |
 
 ### 4. 配置GitHub Environment (可选但推荐)
 
@@ -159,7 +159,7 @@ curl http://localhost:3000
 如果CI/CD出现问题，可以手动部署:
 
 ```bash
-cd /opt/ai-travel-planner
+cd ~/deploy/ai-travel-planner
 git pull origin main
 chmod +x deploy.sh
 ./deploy.sh
@@ -168,12 +168,12 @@ chmod +x deploy.sh
 ### 回滚到上一个版本
 
 ```bash
-cd /opt/ai-travel-planner
+cd ~/deploy/ai-travel-planner
 # 查看备份
-ls -la /opt/ai-travel-planner_backup_*
+ls -la ~/deploy/ai-travel-planner_backup_*
 
 # 回滚到指定备份
-cd /opt/ai-travel-planner_backup_YYYYMMDD_HHMMSS/ai-travel-planner
+cd ~/deploy/ai-travel-planner_backup_YYYYMMDD_HHMMSS/ai-travel-planner
 docker-compose up -d
 ```
 
@@ -193,7 +193,7 @@ docker system df
 ### 重启应用
 
 ```bash
-cd /opt/ai-travel-planner
+cd ~/deploy/ai-travel-planner
 docker-compose restart
 
 # 或者重新部署
@@ -203,7 +203,7 @@ docker-compose restart
 ### 停止应用
 
 ```bash
-cd /opt/ai-travel-planner
+cd ~/deploy/ai-travel-planner
 docker-compose down
 ```
 
@@ -292,6 +292,7 @@ sudo systemctl restart docker
 ## 安全建议
 
 1. **定期更新系统和Docker**
+
    ```bash
    sudo apt update && sudo apt upgrade -y
    ```
@@ -300,6 +301,7 @@ sudo systemctl restart docker
    容器已配置为使用非root用户运行
 
 3. **配置防火墙**
+
    ```bash
    sudo ufw enable
    sudo ufw allow ssh
@@ -345,6 +347,7 @@ export DOCKER_BUILDKIT=1
 ### 3. 配置CDN
 
 考虑使用CDN加速静态资源:
+
 - Cloudflare
 - AWS CloudFront
 - Alibaba Cloud CDN
@@ -370,6 +373,7 @@ export DOCKER_BUILDKIT=1
 ## 支持
 
 如有问题，请查看:
+
 - GitHub Actions日志
 - 服务器日志: `docker logs ai-travel-planner`
 - 项目Issues: [GitHub Issues](https://github.com/your-repo/issues)

@@ -7,8 +7,8 @@ echo "🚀 Starting deployment..."
 
 # Configuration
 APP_NAME="ai-travel-planner"
-DEPLOY_DIR="/opt/${APP_NAME}"
-BACKUP_DIR="/opt/${APP_NAME}_backup_$(date +%Y%m%d_%H%M%S)"
+DEPLOY_DIR="$HOME/deploy/${APP_NAME}"
+BACKUP_DIR="$HOME/deploy/${APP_NAME}_backup_$(date +%Y%m%d_%H%M%S)"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -32,8 +32,7 @@ print_error() {
 # Create deployment directory if it doesn't exist
 if [ ! -d "$DEPLOY_DIR" ]; then
     print_status "Creating deployment directory: $DEPLOY_DIR"
-    sudo mkdir -p "$DEPLOY_DIR"
-    sudo chown $USER:$USER "$DEPLOY_DIR"
+    mkdir -p "$DEPLOY_DIR"
 fi
 
 cd "$DEPLOY_DIR"
@@ -41,8 +40,8 @@ cd "$DEPLOY_DIR"
 # Backup current deployment if exists
 if [ -f "docker-compose.yml" ]; then
     print_status "Backing up current deployment to: $BACKUP_DIR"
-    sudo mkdir -p "$BACKUP_DIR"
-    sudo cp -r "$DEPLOY_DIR" "$BACKUP_DIR/"
+    mkdir -p "$BACKUP_DIR"
+    cp -r "$DEPLOY_DIR" "$BACKUP_DIR/"
 fi
 
 # Pull latest code from repository
@@ -103,6 +102,6 @@ fi
 
 # Clean up old backups (keep last 5)
 print_status "Cleaning up old backups..."
-ls -dt /opt/${APP_NAME}_backup_* 2>/dev/null | tail -n +6 | xargs -r sudo rm -rf
+ls -dt $HOME/deploy/${APP_NAME}_backup_* 2>/dev/null | tail -n +6 | xargs -r rm -rf
 
 print_status "🎉 Deployment completed successfully!"
