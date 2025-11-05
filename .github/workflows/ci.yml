@@ -122,38 +122,9 @@ jobs:
             ServerAliveCountMax 120
           EOF
 
-      - name: Test server connectivity
-        run: |
-          echo "Testing connectivity to ${{ secrets.SERVER_HOST }}..."
-          if ping -c 3 ${{ secrets.SERVER_HOST }} > /dev/null 2>&1; then
-            echo "✓ Server is reachable via ping"
-          else
-            echo "⚠ Server does not respond to ping (might be blocked by firewall)"
-          fi
-
-          echo "Testing SSH port..."
-          if nc -zv ${{ secrets.SERVER_HOST }} 22 2>&1 | grep -q succeeded; then
-            echo "✓ SSH port 22 is open"
-          else
-            echo "✗ SSH port 22 is not accessible"
-            echo "Please check:"
-            echo "  1. SERVER_HOST value: should be public IP or domain"
-            echo "  2. Firewall allows incoming connections from GitHub Actions"
-            echo "  3. Security group/firewall rules allow port 22"
-            exit 1
-          fi
-
       - name: Add server to known hosts
         run: |
-          echo "Adding server to known hosts..."
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>&1 || {
-            echo "Failed to scan SSH host keys. Trying with timeout..."
-            timeout 10 ssh-keyscan -p 22 -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>&1 || {
-              echo "ERROR: Cannot retrieve SSH host keys from ${{ secrets.SERVER_HOST }}"
-              exit 1
-            }
-          }
-          echo "✓ Successfully added server to known hosts"
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
       - name: Copy files to server
         run: |
