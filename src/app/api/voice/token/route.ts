@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // 获取环境变量
     const appId = process.env.NEXT_PUBLIC_XUNFEI_APP_ID;
