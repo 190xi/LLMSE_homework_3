@@ -1,0 +1,164 @@
+name: CI/CD Pipeline (Simple)
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-and-type-check:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        run: pnpm lint
+
+      - name: Run TypeScript check
+        run: pnpm type-check
+
+      - name: Check code formatting
+        run: pnpm format:check
+
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+        env:
+          # Required for build
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: .next
+          retention-days: 7
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  notify-success:
+    name: Build Success
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, build]
+    if: success()
+    steps:
+      - name: Build succeeded
+        run: |
+          echo "✅ All checks passed!"
+          echo "- Linting: ✅"
+          echo "- Type checking: ✅"
+          echo "- Build: ✅"
+
+  deploy-server:
+    name: Deploy to Server
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, build]
+    environment:
+      name: production-server
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Configure SSH to prevent timeout
+        run: |
+          mkdir -p ~/.ssh
+          cat >> ~/.ssh/config << 'EOF'
+          Host *
+            ServerAliveInterval 60
+            ServerAliveCountMax 120
+          EOF
+
+      - name: Add server to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy files to server
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p ~/deploy/ai-travel-planner"
+          scp -r * ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/deploy/ai-travel-planner/
+
+      - name: Deploy application
+        run: |
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=120 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            set -e
+            cd ~/deploy/ai-travel-planner
+            chmod +x deploy.sh
+            ./deploy.sh
+          EOF
+
+      - name: Verify deployment
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            docker ps | grep ai-travel-planner
+            curl -f http://localhost:3000 || exit 1
+          EOF
+
+      - name: Notify deployment status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅ Success' : '❌ Failed';
+            github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: '${{ job.status }}',
+              description: `Deployment ${status}`,
+              context: 'deploy/server'
+            })
+

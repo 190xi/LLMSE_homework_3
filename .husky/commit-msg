@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Commit message validation
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Check if commit message follows conventional commits format
+pattern="^(feat|fix|docs|style|refactor|perf|test|chore|ci)(\(.+\))?: .{1,50}"
+
+if ! echo "$commit_msg" | grep -qE "$pattern"; then
+  echo "❌ Invalid commit message format!"
+  echo ""
+  echo "Commit message must follow Conventional Commits format:"
+  echo "  <type>(<scope>): <subject>"
+  echo ""
+  echo "Examples:"
+  echo "  feat(auth): add Google OAuth login"
+  echo "  fix(trips): resolve date picker issue"
+  echo "  docs(readme): update installation guide"
+  echo ""
+  echo "Types: feat, fix, docs, style, refactor, perf, test, chore, ci"
+  exit 1
+fi
+
+echo "✅ Commit message is valid"
