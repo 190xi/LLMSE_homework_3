@@ -1,15 +1,22 @@
 import OpenAI from 'openai';
 
-if (!process.env.DASHSCOPE_API_KEY) {
-  throw new Error('Missing DASHSCOPE_API_KEY environment variable');
-}
+// Lazy initialization to avoid build-time errors when env var is missing
+let client: OpenAI | null = null;
 
-// Initialize OpenAI client with DashScope API endpoint
-// DashScope (Tongyi Qianwen) provides OpenAI-compatible API
-const client = new OpenAI({
-  apiKey: process.env.DASHSCOPE_API_KEY,
-  baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-});
+function getClient(): OpenAI {
+  if (!client) {
+    if (!process.env.DASHSCOPE_API_KEY) {
+      throw new Error('Missing DASHSCOPE_API_KEY environment variable');
+    }
+    // Initialize OpenAI client with DashScope API endpoint
+    // DashScope (Tongyi Qianwen) provides OpenAI-compatible API
+    client = new OpenAI({
+      apiKey: process.env.DASHSCOPE_API_KEY,
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    });
+  }
+  return client;
+}
 
 export interface TripGenerationParams {
   destination: string;
@@ -132,7 +139,8 @@ ${preferences?.transportPreference ? `交通偏好：${preferences.transportPref
 请直接返回JSON，不要包含其他说明文字。`;
 
   try {
-    const response = await client.chat.completions.create({
+    const apiClient = getClient();
+    const response = await apiClient.chat.completions.create({
       model: 'qwen-plus', // Using Qwen-Plus model
       messages: [
         {
