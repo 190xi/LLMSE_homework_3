@@ -4,7 +4,9 @@
  */
 
 import { VoiceRecorder } from './recorder';
+import { PCMRecorder } from './pcm-recorder';
 import { XunfeiRecognizer } from './xunfei';
+import { AudioConverter } from './audio-converter';
 import type { VoiceStatus, RecognitionResult, AudioData } from '@/types/voice';
 
 export interface VoiceRecognitionOptions {
@@ -17,7 +19,8 @@ export interface VoiceRecognitionOptions {
 }
 
 export class VoiceRecognitionService {
-  private recorder: VoiceRecorder;
+  private recorder: VoiceRecorder | null = null;
+  private pcmRecorder: PCMRecorder | null = null;
   private recognizer: XunfeiRecognizer | null = null;
   private options: VoiceRecognitionOptions;
   private currentStatus: VoiceStatus = 'idle';
@@ -39,11 +42,18 @@ export class VoiceRecognitionService {
       ...options,
     };
 
-    this.recorder = new VoiceRecorder({
-      maxDuration: this.options.maxDuration,
-    });
-
-    this.setupRecorderListeners();
+    // 根据模式选择录音器
+    if (this.options.realtime) {
+      // 实时模式：使用 PCMRecorder 直接获取 PCM 数据
+      this.pcmRecorder = new PCMRecorder();
+      this.setupPCMRecorderListeners();
+    } else {
+      // 非实时模式：使用 VoiceRecorder 录制完整音频
+      this.recorder = new VoiceRecorder({
+        maxDuration: this.options.maxDuration,
+      });
+      this.setupRecorderListeners();
+    }
   }
 
   /**
@@ -53,31 +63,31 @@ export class VoiceRecognitionService {
     try {
       // 检查环境变量
       const appId = process.env.NEXT_PUBLIC_XUNFEI_APP_ID;
-      const apiKey = process.env.NEXT_PUBLIC_XUNFEI_API_KEY;
-      const apiSecret = process.env.NEXT_PUBLIC_XUNFEI_API_SECRET;
 
-      if (!appId || !apiKey || !apiSecret) {
-        throw new Error('科大讯飞 API 配置不完整，请检查环境变量');
+      if (!appId) {
+        throw new Error('科大讯飞 APP_ID 未配置，请检查环境变量');
       }
 
-      // 创建识别器
+      // 创建识别器（只需 appId，签名在服务器端生成）
       this.recognizer = new XunfeiRecognizer({
         appId,
-        apiKey,
-        apiSecret,
       });
 
       this.setupRecognizerListeners();
 
-      // 如果是实时识别，先启动识别器并等待连接成功
+      // 如果是实时识别，先启动识别器
       if (this.options.realtime && this.options.autoStart) {
         console.log('正在启动识别器...');
         await this.recognizer.start();
         console.log('识别器启动完成，开始录音');
       }
 
-      // 识别器就绪后再开始录音
-      await this.recorder.start();
+      // 根据模式启动对应的录音器
+      if (this.options.realtime && this.pcmRecorder) {
+        await this.pcmRecorder.start();
+      } else if (this.recorder) {
+        await this.recorder.start();
+      }
 
       this.updateStatus('recording');
     } catch (error) {
@@ -91,7 +101,12 @@ export class VoiceRecognitionService {
    * 停止录音和识别
    */
   stop(): void {
-    this.recorder.stop();
+    if (this.pcmRecorder) {
+      this.pcmRecorder.stop();
+    }
+    if (this.recorder) {
+      this.recorder.stop();
+    }
     this.recognizer?.end();
   }
 
@@ -99,7 +114,12 @@ export class VoiceRecognitionService {
    * 取消录音和识别
    */
   cancel(): void {
-    this.recorder.cancel();
+    if (this.pcmRecorder) {
+      this.pcmRecorder.cancel();
+    }
+    if (this.recorder) {
+      this.recorder.cancel();
+    }
     this.recognizer?.cancel();
     this.recognizedText = '';
     this.updateStatus('idle');
@@ -137,9 +157,42 @@ export class VoiceRecognitionService {
   }
 
   /**
-   * 设置录音器监听
+   * 设置 PCM 录音器监听 (实时模式)
+   */
+  private setupPCMRecorderListeners(): void {
+    if (!this.pcmRecorder) return;
+
+    this.pcmRecorder.on('onStateChange', (state) => {
+      // 传递音量信息
+      this.listeners.onAudioLevel?.(state.audioLevel);
+
+      // 更新状态
+      if (state.status === 'recording') {
+        this.updateStatus('recording');
+      } else if (state.status === 'error') {
+        this.handleError(new Error(state.error || '录音错误'));
+      }
+    });
+
+    this.pcmRecorder.on('onDataAvailable', (pcmData: Int16Array) => {
+      // 实时发送 PCM 数据给识别器
+      if (this.recognizer) {
+        console.log('发送 PCM 数据:', pcmData.byteLength, 'bytes');
+        this.recognizer.send(pcmData.buffer as ArrayBuffer);
+      }
+    });
+
+    this.pcmRecorder.on('onError', (error) => {
+      this.handleError(error);
+    });
+  }
+
+  /**
+   * 设置录音器监听 (非实时模式)
    */
   private setupRecorderListeners(): void {
+    if (!this.recorder) return;
+
     this.recorder.on('onStateChange', (state) => {
       // 传递音量信息
       this.listeners.onAudioLevel?.(state.audioLevel);
@@ -152,20 +205,9 @@ export class VoiceRecognitionService {
       }
     });
 
-    this.recorder.on('onDataAvailable', (data) => {
-      // 实时发送音频数据给识别器
-      if (this.options.realtime && this.recognizer) {
-        data.arrayBuffer().then((buffer) => {
-          this.recognizer?.send(buffer);
-        });
-      }
-    });
-
     this.recorder.on('onComplete', async (audio: AudioData) => {
-      // 如果不是实时识别，录音完成后再识别
-      if (!this.options.realtime) {
-        await this.recognizeAudio(audio);
-      }
+      // 非实时识别：录音完成后再识别
+      await this.recognizeAudio(audio);
     });
 
     this.recorder.on('onError', (error) => {
@@ -213,14 +255,18 @@ export class VoiceRecognitionService {
       this.updateStatus('recognizing');
       await this.recognizer.start();
 
-      // 分块发送音频数据
-      const chunkSize = 1280; // 每次发送 1280 字节
-      const buffer = audio.arrayBuffer;
+      // 先转换音频格式为PCM
+      console.log('转换音频格式为PCM...');
+      const pcmBuffer = await AudioConverter.convertToPCM(audio.blob, 16000);
+      console.log('音频转换完成，PCM数据大小:', pcmBuffer.byteLength, 'bytes');
 
-      for (let i = 0; i < buffer.byteLength; i += chunkSize) {
-        const chunk = buffer.slice(
+      // 分块发送音频数据
+      const chunkSize = 1280; // 每次发送 1280 字节 (40ms @ 16kHz)
+
+      for (let i = 0; i < pcmBuffer.byteLength; i += chunkSize) {
+        const chunk = pcmBuffer.slice(
           i,
-          Math.min(i + chunkSize, buffer.byteLength)
+          Math.min(i + chunkSize, pcmBuffer.byteLength)
         );
         this.recognizer.send(chunk);
 
@@ -255,7 +301,8 @@ export class VoiceRecognitionService {
    * 销毁实例
    */
   destroy(): void {
-    this.recorder.destroy();
+    this.recorder?.destroy();
+    this.pcmRecorder?.destroy();
     this.recognizer?.destroy();
     this.listeners = {};
   }

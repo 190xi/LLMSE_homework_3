@@ -55,7 +55,12 @@ export class VoiceRecorder {
    */
   async start(): Promise<void> {
     if (!VoiceRecorder.isSupported()) {
-      throw new Error('当前浏览器不支持录音功能');
+      throw new Error(
+        '您的浏览器不支持录音功能。' +
+          (typeof window !== 'undefined' && window.location.protocol === 'http:'
+            ? ' 请使用 HTTPS 协议访问。'
+            : ' 请使用最新版本的 Chrome、Firefox 或 Safari 浏览器。')
+      );
     }
 
     if (this.state.status === 'recording') {

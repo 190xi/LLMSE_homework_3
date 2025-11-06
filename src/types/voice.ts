@@ -39,8 +39,7 @@ export interface RecognitionResult {
 
 export interface XunfeiConfig {
   appId: string;
-  apiKey: string;
-  apiSecret: string;
+  // 注意：apiKey 和 apiSecret 已移至服务器端，不再在客户端使用
 }
 
 export interface XunfeiParams {

@@ -14,7 +14,8 @@ export class XunfeiRecognizer {
   private ws: WebSocket | null = null;
   private config: XunfeiConfig;
   private params: Required<XunfeiParams>;
-  private resultText: string = '';
+  private resultText: string = ''; // 已确认的文本（所有段落累积）
+  private currentSegmentText: string = ''; // 当前段落的临时文本
   private status: VoiceStatus = 'idle';
   private connectionReady: Promise<void> | null = null;
   private resolveConnection: (() => void) | null = null;
@@ -186,6 +187,8 @@ export class XunfeiRecognizer {
    * 处理识别结果消息
    */
   private handleMessage(response: any): void {
+    console.log('收到识别结果:', JSON.stringify(response, null, 2));
+
     if (response.code !== 0) {
       this.handleError(
         new Error(`识别错误: ${response.message} (${response.code})`)
@@ -194,43 +197,84 @@ export class XunfeiRecognizer {
     }
 
     const data = response.data;
-    if (!data) return;
+    if (!data) {
+      console.warn('响应中没有data字段');
+      return;
+    }
 
     // 解析识别结果
     if (data.result) {
       const ws = data.result.ws;
-      if (ws && Array.isArray(ws)) {
-        let tempText = '';
+      if (ws && Array.isArray(ws) && ws.length > 0) {
+        // 检查是否是新段落开始（第一个词的 bg=0）
+        const isNewSegment = ws[0].bg === 0;
+
+        if (isNewSegment && this.currentSegmentText) {
+          // 新段落开始，将之前的段落文本追加到结果中
+          console.log('新段落开始，确认上一段:', this.currentSegmentText);
+          this.resultText += this.currentSegmentText;
+          this.currentSegmentText = '';
+        }
+
+        // 解析当前帧的文本
+        let frameText = '';
         ws.forEach((item: any) => {
           if (item.cw && Array.isArray(item.cw)) {
             item.cw.forEach((word: any) => {
-              tempText += word.w;
+              frameText += word.w;
             });
           }
         });
 
-        // 判断是否为最终结果
-        const isFinal = data.status === 2;
+        // 更新当前段落文本
+        this.currentSegmentText = frameText;
 
-        if (isFinal) {
-          this.resultText += tempText;
-        }
+        console.log('当前段落文本:', this.currentSegmentText);
+        console.log('已确认文本:', this.resultText);
+
+        // 判断是否为整个识别会话的结束
+        const isSessionEnd = data.status === 2;
+        console.log(
+          '会话状态 data.status:',
+          data.status,
+          '是否结束:',
+          isSessionEnd
+        );
+
+        // 构建完整文本（已确认 + 当前段落）
+        const fullText = this.resultText + this.currentSegmentText;
 
         const result: RecognitionResult = {
-          text: isFinal ? this.resultText : tempText,
-          isFinal,
+          text: fullText,
+          isFinal: isSessionEnd, // 只有会话结束时才是最终结果
           confidence: data.confidence,
         };
 
+        console.log('触发onResult回调:', {
+          fullText,
+          isFinal: isSessionEnd,
+          resultText: this.resultText,
+          currentSegment: this.currentSegmentText,
+        });
+
         this.listeners.onResult?.(result);
 
-        // 如果是最终结果，触发完成回调
-        if (isFinal) {
+        // 如果是会话结束，触发完成回调
+        if (isSessionEnd) {
+          // 确认最后一段文本
+          this.resultText += this.currentSegmentText;
+          this.currentSegmentText = '';
+
+          console.log('识别完成，最终结果:', this.resultText);
           this.updateStatus('completed');
           this.listeners.onComplete?.(this.resultText);
           this.cleanup();
         }
+      } else {
+        console.warn('ws字段为空或不是数组');
       }
+    } else {
+      console.log('响应中没有result字段，可能是确认帧');
     }
   }
 
@@ -305,48 +349,29 @@ export class XunfeiRecognizer {
   }
 
   /**
-   * 生成 WebSocket URL
+   * 生成 WebSocket URL（通过服务器端 API）
    */
   private async getWebSocketUrl(): Promise<string> {
-    const host = 'iat-api.xfyun.cn';
-    const path = '/v2/iat';
-    const date = new Date().toUTCString();
+    try {
+      // 调用服务器端 API 生成 URL，避免客户端 crypto.subtle 兼容性问题
+      const response = await fetch('/api/voice/token');
 
-    // 生成签名原文
-    const signatureOrigin = `host: ${host}\ndate: ${date}\nGET ${path} HTTP/1.1`;
-    const signature = await this.hmacSHA256(
-      signatureOrigin,
-      this.config.apiSecret
-    );
+      if (!response.ok) {
+        throw new Error(`获取语音识别 URL 失败: ${response.status}`);
+      }
 
-    // 生成 authorization
-    const authorizationOrigin = `api_key="${this.config.apiKey}", algorithm="hmac-sha256", headers="host date request-line", signature="${signature}"`;
-    const authorization = encodeURIComponent(btoa(authorizationOrigin));
+      const data = await response.json();
 
-    // 构建 URL
-    const url = `wss://${host}${path}?authorization=${authorization}&date=${encodeURIComponent(date)}&host=${host}`;
+      if (!data.url) {
+        throw new Error('服务器返回的 URL 为空');
+      }
 
-    return url;
-  }
-
-  /**
-   * HMAC-SHA256 签名
-   */
-  private async hmacSHA256(message: string, secret: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    const messageData = encoder.encode(message);
-
-    const key = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-
-    const signature = await crypto.subtle.sign('HMAC', key, messageData);
-    return btoa(String.fromCharCode(...new Uint8Array(signature)));
+      console.log('成功获取 WebSocket URL');
+      return data.url;
+    } catch (error) {
+      console.error('获取 WebSocket URL 失败:', error);
+      throw new Error('无法连接到语音识别服务，请检查网络连接');
+    }
   }
 
   /**

@@ -39,8 +39,8 @@ export function VoiceInput({
 }: VoiceInputProps) {
   const [status, setStatus] = useState<VoiceStatus>('idle');
   const [audioLevel, setAudioLevel] = useState(0);
-  const [recognizedText, setRecognizedText] = useState('');
-  const [intermediateText, setIntermediateText] = useState('');
+  const [recognizedText, setRecognizedText] = useState(''); // 最终确认的文本
+  const [intermediateText, setIntermediateText] = useState(''); // 临时的中间结果
   const [errorMessage, setErrorMessage] = useState('');
   const [duration, setDuration] = useState(0);
 
@@ -77,16 +77,23 @@ export function VoiceInput({
       });
 
       service.on('onResult', (result) => {
+        console.log('VoiceInput 收到结果:', result);
+
         if (result.isFinal) {
+          // 最终结果：显示在已确认文本区域
           setRecognizedText(result.text);
           setIntermediateText('');
         } else {
+          // 中间结果：只更新临时文本，不累积
           setIntermediateText(result.text);
         }
+
+        // 调用外部回调
         onResult?.(result);
       });
 
       service.on('onComplete', (text) => {
+        console.log('VoiceInput 识别完成:', text);
         setRecognizedText(text);
         setIntermediateText('');
         onComplete?.(text);

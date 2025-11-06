@@ -8,26 +8,37 @@ import type { RecognitionResult } from '@/types/voice';
 
 export default function VoiceTestPage() {
   const [history, setHistory] = useState<
-    Array<{ text: string; timestamp: Date; type: 'final' | 'intermediate' }>
+    Array<{ text: string; timestamp: Date; isFinal: boolean }>
   >([]);
-  const [lastResult, setLastResult] = useState('');
+  const [currentResult, setCurrentResult] = useState(''); // 当前正在识别的文本
+  const [lastFinalResult, setLastFinalResult] = useState(''); // 最后一次最终结果
   const [error, setError] = useState('');
 
   const handleResult = (result: RecognitionResult) => {
-    setLastResult(result.text);
-    setHistory((prev) => [
-      ...prev,
-      {
-        text: result.text,
-        timestamp: new Date(),
-        type: result.isFinal ? 'final' : 'intermediate',
-      },
-    ]);
+    console.log('测试页面收到结果:', result);
+
+    if (result.isFinal) {
+      // 最终结果：添加到历史记录
+      setLastFinalResult(result.text);
+      setCurrentResult('');
+      setHistory((prev) => [
+        ...prev,
+        {
+          text: result.text,
+          timestamp: new Date(),
+          isFinal: true,
+        },
+      ]);
+    } else {
+      // 中间结果：只更新当前识别中的文本，不添加到历史
+      setCurrentResult(result.text);
+    }
   };
 
   const handleComplete = (text: string) => {
-    setLastResult(text);
     console.log('识别完成:', text);
+    setLastFinalResult(text);
+    setCurrentResult('');
   };
 
   const handleError = (err: Error) => {
@@ -37,7 +48,8 @@ export default function VoiceTestPage() {
 
   const clearHistory = () => {
     setHistory([]);
-    setLastResult('');
+    setLastFinalResult('');
+    setCurrentResult('');
     setError('');
   };
 
@@ -58,6 +70,20 @@ export default function VoiceTestPage() {
         <Card className="p-6">
           <h2 className="mb-4 text-lg font-semibold">环境配置检查</h2>
           <div className="space-y-2 text-sm">
+            {/* HTTPS 检查 */}
+            {typeof window !== 'undefined' &&
+              window.location.protocol === 'http:' &&
+              window.location.hostname !== 'localhost' && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-sm font-semibold text-red-800">
+                    ⚠️ 安全警告：当前使用 HTTP 协议
+                  </p>
+                  <p className="mt-1 text-sm text-red-700">
+                    浏览器不允许在 HTTP 协议下访问麦克风。请使用 HTTPS
+                    协议访问本页面，或在本地使用 localhost。
+                  </p>
+                </div>
+              )}
             <div className="flex items-center gap-2">
               <span
                 className={
@@ -70,38 +96,17 @@ export default function VoiceTestPage() {
               </span>
               <span>NEXT_PUBLIC_XUNFEI_APP_ID</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={
-                  process.env.NEXT_PUBLIC_XUNFEI_API_KEY
-                    ? 'text-green-600'
-                    : 'text-red-600'
-                }
-              >
-                {process.env.NEXT_PUBLIC_XUNFEI_API_KEY ? '✓' : '✗'}
-              </span>
-              <span>NEXT_PUBLIC_XUNFEI_API_KEY</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={
-                  process.env.NEXT_PUBLIC_XUNFEI_API_SECRET
-                    ? 'text-green-600'
-                    : 'text-red-600'
-                }
-              >
-                {process.env.NEXT_PUBLIC_XUNFEI_API_SECRET ? '✓' : '✗'}
-              </span>
-              <span>NEXT_PUBLIC_XUNFEI_API_SECRET</span>
+            <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-2">
+              <p className="text-xs text-blue-700">
+                💡 API_KEY 和 API_SECRET 现已移至服务器端，更加安全
+              </p>
             </div>
           </div>
-          {(!process.env.NEXT_PUBLIC_XUNFEI_APP_ID ||
-            !process.env.NEXT_PUBLIC_XUNFEI_API_KEY ||
-            !process.env.NEXT_PUBLIC_XUNFEI_API_SECRET) && (
+          {!process.env.NEXT_PUBLIC_XUNFEI_APP_ID && (
             <div className="mt-4 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
               <p className="text-sm text-yellow-800">
                 ⚠️ 请在 <code className="bg-yellow-100 px-1">.env.local</code>{' '}
-                中配置科大讯飞 API 密钥
+                中配置科大讯飞 APP_ID
               </p>
             </div>
           )}
@@ -119,11 +124,24 @@ export default function VoiceTestPage() {
           />
         </Card>
 
+        {/* 当前识别中 */}
+        {currentResult && (
+          <Card className="border-blue-200 bg-blue-50 p-6">
+            <h2 className="mb-4 text-lg font-semibold text-blue-900">
+              正在识别中...
+            </h2>
+            <p className="text-lg text-blue-700">{currentResult}</p>
+            <p className="mt-2 text-xs text-blue-500">
+              💡 这是实时识别结果，停止说话后会自动确认
+            </p>
+          </Card>
+        )}
+
         {/* 最新结果 */}
-        {lastResult && (
+        {lastFinalResult && (
           <Card className="p-6">
-            <h2 className="mb-4 text-lg font-semibold">最新识别结果</h2>
-            <p className="text-lg text-gray-900">{lastResult}</p>
+            <h2 className="mb-4 text-lg font-semibold">最终识别结果</h2>
+            <p className="text-lg text-gray-900">{lastFinalResult}</p>
           </Card>
         )}
 
@@ -141,7 +159,9 @@ export default function VoiceTestPage() {
         {history.length > 0 && (
           <Card className="p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">识别历史</h2>
+              <h2 className="text-lg font-semibold">
+                识别历史（共 {history.length} 条）
+              </h2>
               <Button variant="outline" size="sm" onClick={clearHistory}>
                 清空历史
               </Button>
@@ -150,23 +170,13 @@ export default function VoiceTestPage() {
               {history.map((item, index) => (
                 <div
                   key={index}
-                  className={`rounded-lg border p-3 ${
-                    item.type === 'final'
-                      ? 'border-green-200 bg-green-50'
-                      : 'border-gray-200 bg-gray-50'
-                  }`}
+                  className="rounded-lg border border-green-200 bg-green-50 p-3"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="flex-1 text-sm text-gray-900">{item.text}</p>
                     <div className="flex-shrink-0 text-right">
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs ${
-                          item.type === 'final'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {item.type === 'final' ? '最终' : '中间'}
+                      <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">
+                        最终结果
                       </span>
                       <p className="mt-1 text-xs text-gray-500">
                         {item.timestamp.toLocaleTimeString()}
