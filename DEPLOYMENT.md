@@ -59,30 +59,20 @@ sudo chmod +x /usr/local/bin/docker-compose
 sudo usermod -aG docker $USER
 ```
 
-### 3. 服务器环境变量配置
+### 3. 服务器环境变量配置（已自动化）
 
-在服务器的 `~/deploy/ai-travel-planner/.env.production` 文件中配置环境变量:
+**✨ 新版本无需手动配置！**
+
+环境变量现在通过 GitHub Actions 自动部署。你只需要在 GitHub 中配置 Secrets（见下一节），CI/CD 会在部署时自动创建 `.env.production` 文件。
+
+如果需要手动配置（例如调试或应急情况），参考 `.env.production.example` 文件：
 
 ```bash
-# 在服务器上创建目录和配置文件
+# 在服务器上创建目录
 mkdir -p ~/deploy/ai-travel-planner
 
-cd ~/deploy/ai-travel-planner
-
-# 创建环境变量文件
-cat > .env.production << 'EOF'
-NODE_ENV=production
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-DATABASE_URL=your_database_url
-NEXTAUTH_SECRET=your_nextauth_secret
-NEXTAUTH_URL=http://your-server-domain.com
-DASHSCOPE_API_KEY=your_dashscope_api_key
-EOF
-
-# 设置文件权限
-chmod 600 .env.production
+# 查看示例配置
+cat .env.production.example
 ```
 
 ## GitHub配置
@@ -134,12 +124,32 @@ chmod 600 ~/.ssh/authorized_keys
 | ------------------------------- | ------------------------- | ----------------------------------------- | ---- |
 | `NEXT_PUBLIC_SUPABASE_URL`      | Supabase 项目 URL         | `https://xxxxx.supabase.co`               | ✅   |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase 匿名公钥（前端） | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | ✅   |
+| `NEXT_PUBLIC_XUNFEI_APP_ID`     | 讯飞语音识别 App ID       | `xxxxxxxx`                                | ⭕   |
+| `NEXT_PUBLIC_XUNFEI_API_KEY`    | 讯飞语音识别 API Key      | `xxxxxxxx`                                | ⭕   |
+| `NEXT_PUBLIC_XUNFEI_API_SECRET` | 讯飞语音识别 API Secret   | `xxxxxxxx`                                | ⭕   |
+| `NEXT_PUBLIC_AMAP_KEY`          | 高德地图 API Key          | `xxxxxxxx`                                | ⭕   |
+| `NEXT_PUBLIC_AMAP_SECRET`       | 高德地图 API Secret       | `xxxxxxxx`                                | ⭕   |
+
+**图例**：✅ 必需 | ⭕ 可选（功能可选）
+
+#### 运行时环境变量（Runtime）
+
+这些环境变量会在部署时自动创建到服务器的 `.env.production` 文件中：
+
+| Secret名称                  | 说明                          | 示例                      | 必需 |
+| --------------------------- | ----------------------------- | ------------------------- | ---- |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase 服务端密钥（仅后端） | `eyJhbGciOiJIUzI1NiI...`  | ✅   |
+| `NEXTAUTH_SECRET`           | NextAuth.js 加密密钥          | `openssl rand -base64 32` | ✅   |
+| `NEXTAUTH_URL`              | 应用访问地址                  | `https://your-domain.com` | ✅   |
+| `DASHSCOPE_API_KEY`         | 阿里云通义千问 API Key        | `sk-xxxxx`                | ✅   |
 
 **重要说明**:
 
 - `NEXT_PUBLIC_*` 开头的变量会被编译到前端代码中，因此这些变量是公开可见的
 - 不要在这些变量中存储敏感信息
-- 服务端密钥（如 `SUPABASE_SERVICE_ROLE_KEY`、`DASHSCOPE_API_KEY`）应该在服务器的 `.env.production` 中配置，而不是在 GitHub Secrets 中
+- 运行时环境变量（如 `SUPABASE_SERVICE_ROLE_KEY`、`DASHSCOPE_API_KEY`）只存在于服务器端，不会暴露给前端
+- ✨ **自动部署**：运行时环境变量会在部署时自动从 GitHub Secrets 创建到服务器
+- **可选功能**：讯飞语音识别和高德地图的 API 为可选配置，不影响核心功能
 
 **注意**: `GITHUB_TOKEN` 由 GitHub Actions 自动提供，无需手动配置。
 
@@ -178,6 +188,7 @@ chmod 600 ~/.ssh/authorized_keys
 
 3. **部署到服务器**
    - SSH连接到服务器
+   - ✨ **自动创建 `.env.production`** - 从 GitHub Secrets 生成环境变量文件
    - 登录到GitHub Container Registry
    - 拉取最新镜像
    - 停止旧容器，启动新容器
@@ -469,12 +480,13 @@ export DOCKER_BUILDKIT=1
 
 1. ✅ **移除重复构建** - CI构建一次，服务器拉取镜像
 2. ✅ **使用GitHub Container Registry** - 统一镜像管理
-3. ✅ **移除Git操作冗余** - 不再在服务器维护git仓库
-4. ✅ **优化Docker缓存** - GitHub Actions缓存加速构建
-5. ✅ **简化deploy.sh** - 从131行减少到94行
-6. ✅ **移除无用jobs** - 删除notify-success等无效步骤
-7. ✅ **强化安全扫描** - 安全问题阻止部署
-8. ✅ **版本化镜像** - 每个commit都有对应镜像，易于追溯
+3. ✅ **自动化环境变量管理** - 从 GitHub Secrets 自动部署环境变量，无需手动配置
+4. ✅ **移除Git操作冗余** - 不再在服务器维护git仓库
+5. ✅ **优化Docker缓存** - GitHub Actions缓存加速构建
+6. ✅ **简化deploy.sh** - 从131行减少到94行
+7. ✅ **移除无用jobs** - 删除notify-success等无效步骤
+8. ✅ **强化安全扫描** - 安全问题阻止部署
+9. ✅ **版本化镜像** - 每个commit都有对应镜像，易于追溯
 
 **技术栈:**
 

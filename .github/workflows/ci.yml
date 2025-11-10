@@ -86,6 +86,11 @@ jobs:
             GIT_COMMIT=${{ github.sha }}
             NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            NEXT_PUBLIC_XUNFEI_APP_ID=${{ secrets.NEXT_PUBLIC_XUNFEI_APP_ID }}
+            NEXT_PUBLIC_XUNFEI_API_KEY=${{ secrets.NEXT_PUBLIC_XUNFEI_API_KEY }}
+            NEXT_PUBLIC_XUNFEI_API_SECRET=${{ secrets.NEXT_PUBLIC_XUNFEI_API_SECRET }}
+            NEXT_PUBLIC_AMAP_KEY=${{ secrets.NEXT_PUBLIC_AMAP_KEY }}
+            NEXT_PUBLIC_AMAP_SECRET=${{ secrets.NEXT_PUBLIC_AMAP_SECRET }}
 
   security-scan:
     name: Security Scan
@@ -140,10 +145,33 @@ jobs:
         run: |
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Copy deployment files to server
+      - name: Create environment file on server
         run: |
           ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p ~/deploy/ai-travel-planner"
-          scp deploy.sh docker-compose.yml .env.production ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/deploy/ai-travel-planner/ || true
+
+          # Create .env.production file from GitHub secrets
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "cat > ~/deploy/ai-travel-planner/.env.production << 'EOF'
+          NODE_ENV=production
+          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_XUNFEI_APP_ID=${{ secrets.NEXT_PUBLIC_XUNFEI_APP_ID }}
+          NEXT_PUBLIC_XUNFEI_API_KEY=${{ secrets.NEXT_PUBLIC_XUNFEI_API_KEY }}
+          NEXT_PUBLIC_XUNFEI_API_SECRET=${{ secrets.NEXT_PUBLIC_XUNFEI_API_SECRET }}
+          NEXT_PUBLIC_AMAP_KEY=${{ secrets.NEXT_PUBLIC_AMAP_KEY }}
+          NEXT_PUBLIC_AMAP_SECRET=${{ secrets.NEXT_PUBLIC_AMAP_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+          NEXTAUTH_URL=${{ secrets.NEXTAUTH_URL }}
+          DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}
+          EOF
+          "
+
+          # Set secure file permissions
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "chmod 600 ~/deploy/ai-travel-planner/.env.production"
+
+      - name: Copy deployment files to server
+        run: |
+          scp deploy.sh docker-compose.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/deploy/ai-travel-planner/
 
       - name: Deploy application
         env:
