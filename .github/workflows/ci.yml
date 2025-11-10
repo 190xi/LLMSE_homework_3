@@ -84,6 +84,8 @@ jobs:
           build-args: |
             BUILD_TIME=${{ github.run_number }}
             GIT_COMMIT=${{ github.sha }}
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
   security-scan:
     name: Security Scan

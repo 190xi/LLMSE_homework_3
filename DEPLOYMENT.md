@@ -74,10 +74,11 @@ cat > .env.production << 'EOF'
 NODE_ENV=production
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 DATABASE_URL=your_database_url
 NEXTAUTH_SECRET=your_nextauth_secret
 NEXTAUTH_URL=http://your-server-domain.com
-OPENAI_API_KEY=your_openai_api_key
+DASHSCOPE_API_KEY=your_dashscope_api_key
 EOF
 
 # 设置文件权限
@@ -117,11 +118,28 @@ chmod 600 ~/.ssh/authorized_keys
 
 在GitHub仓库中配置以下Secrets (`Settings` → `Secrets and variables` → `Actions` → `New repository secret`):
 
+#### 服务器访问相关
+
 | Secret名称        | 说明               | 示例                                     |
 | ----------------- | ------------------ | ---------------------------------------- |
 | `SSH_PRIVATE_KEY` | 刚才生成的私钥内容 | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
 | `SERVER_HOST`     | 服务器IP地址或域名 | `192.168.1.100` 或 `server.example.com`  |
 | `SERVER_USER`     | SSH登录用户名      | `ubuntu` 或 `root`                       |
+
+#### 构建时环境变量（Build-time）
+
+这些环境变量会在 Docker 构建阶段注入，用于编译前端代码：
+
+| Secret名称                      | 说明                      | 示例                                      | 必需 |
+| ------------------------------- | ------------------------- | ----------------------------------------- | ---- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase 项目 URL         | `https://xxxxx.supabase.co`               | ✅   |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase 匿名公钥（前端） | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` | ✅   |
+
+**重要说明**:
+
+- `NEXT_PUBLIC_*` 开头的变量会被编译到前端代码中，因此这些变量是公开可见的
+- 不要在这些变量中存储敏感信息
+- 服务端密钥（如 `SUPABASE_SERVICE_ROLE_KEY`、`DASHSCOPE_API_KEY`）应该在服务器的 `.env.production` 中配置，而不是在 GitHub Secrets 中
 
 **注意**: `GITHUB_TOKEN` 由 GitHub Actions 自动提供，无需手动配置。
 
