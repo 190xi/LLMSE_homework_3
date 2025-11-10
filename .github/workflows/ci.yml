@@ -61,11 +61,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare repository name (lowercase)
+        id: repo
+        run: echo "repo_lower=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ steps.repo.outputs.repo_lower }}
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
@@ -127,6 +131,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Prepare repository name (lowercase)
+        id: repo
+        run: echo "repo_lower=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -175,7 +183,7 @@ jobs:
 
       - name: Deploy application
         env:
-          IMAGE_TAG: ghcr.io/${{ github.repository }}:${{ github.ref_name }}-${{ github.sha }}
+          IMAGE_TAG: ghcr.io/${{ steps.repo.outputs.repo_lower }}:${{ github.ref_name }}-${{ github.sha }}
         run: |
           ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=120 ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << EOF
             set -e
