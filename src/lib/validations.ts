@@ -38,6 +38,24 @@ export const updateProfileSchema = z.object({
   defaultCity: z.string().max(100).optional(),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('请输入有效的邮箱地址'),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(8, '密码至少需要8个字符')
+      .regex(/[A-Za-z]/, '密码必须包含至少一个字母')
+      .regex(/[0-9]/, '密码必须包含至少一个数字'),
+    confirmPassword: z.string().min(1, '请确认密码'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: '两次输入的密码不一致',
+    path: ['confirmPassword'],
+  });
+
 // ============================================
 // Trip Schemas
 // ============================================
@@ -111,6 +129,8 @@ export const userPreferencesSchema = z.object({
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type CreateTripInput = z.infer<typeof createTripSchema>;
 export type UpdateTripInput = z.infer<typeof updateTripSchema>;
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;

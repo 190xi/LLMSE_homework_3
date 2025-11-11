@@ -103,14 +103,14 @@ export function LoginForm() {
             )}
           </div>
 
-          {/* <div className="flex items-center justify-between">
+          <div className="flex items-center justify-end">
             <Link
               href="/forgot-password"
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
             >
               忘记密码？
             </Link>
-          </div> */}
+          </div>
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">

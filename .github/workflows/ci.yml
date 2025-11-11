@@ -135,6 +135,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      statuses: write
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'production-server' || 'staging-server' }}
     steps:
