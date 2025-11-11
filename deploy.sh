@@ -47,19 +47,23 @@ if ! docker pull "$IMAGE_TAG"; then
     exit 1
 fi
 
-# Tag the pulled image as latest for docker-compose
-print_status "Tagging image as latest..."
-docker tag "$IMAGE_TAG" "${APP_NAME}:latest"
-
-# Stop and remove existing containers
+# Stop and remove existing containers first
 print_status "Stopping existing containers..."
 if docker ps -a | grep -q "$APP_NAME"; then
     docker-compose down || true
 fi
 
-# Start containers with the new image
-print_status "Starting containers..."
-docker-compose up -d
+# Remove old 'latest' tag to avoid using stale image
+print_status "Removing old latest tag if exists..."
+docker rmi "${APP_NAME}:latest" 2>/dev/null || true
+
+# Tag the pulled image as latest for docker-compose
+print_status "Tagging new image as latest..."
+docker tag "$IMAGE_TAG" "${APP_NAME}:latest"
+
+# Start containers with the new image (force recreate to ensure new image is used)
+print_status "Starting containers with new image..."
+docker-compose up -d --force-recreate
 
 # Wait for container to start
 print_status "Waiting for container to start..."

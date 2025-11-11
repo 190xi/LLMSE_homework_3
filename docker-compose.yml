@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ai-travel-planner:
     # Image is pulled from GitHub Container Registry and tagged as 'latest' by deploy.sh
