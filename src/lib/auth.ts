@@ -15,6 +15,8 @@ const supabase = createClient(
 );
 
 export const authOptions: NextAuthOptions = {
+  // Trust proxy headers when behind Cloudflare or other reverse proxies
+  trustHost: true,
   providers: [
     CredentialsProvider({
       name: 'Credentials',
