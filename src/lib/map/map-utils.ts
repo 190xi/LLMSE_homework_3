@@ -99,10 +99,6 @@ export async function extractMarkersFromItinerary(
     ? destination.replace(/市|省|自治区|特别行政区/g, '').trim()
     : undefined;
 
-  console.log(
-    `开始提取地图标记，行程天数: ${itinerary.length}，目的地城市: ${city || '未指定'}`
-  );
-
   for (const day of itinerary) {
     if (!day.activities || !Array.isArray(day.activities)) continue;
 
@@ -133,17 +129,12 @@ export async function extractMarkersFromItinerary(
               lng: activity.coordinates.lng,
               lat: activity.coordinates.lat,
             };
-            console.log(`[地理编码] ✓ 使用AI提供的坐标: ${location}`, coords);
           } else {
             // 没有坐标时，进行地理编码
             // 优先从地址中提取城市，如果没有再使用destination
             const addressToGeocode = activity.fullAddress || location;
             const addressCity = extractCityFromAddress(addressToGeocode);
             const geocodeCity = addressCity || city;
-
-            console.log(
-              `[地理编码] 需要地理编码: ${addressToGeocode}, 使用城市: ${geocodeCity || '全国'} ${addressCity ? '(从地址提取)' : '(使用目的地)'}`
-            );
 
             // 传入城市参数，缩短超时到3秒
             coords = await geocodeAddress(addressToGeocode, 3000, geocodeCity);
@@ -187,13 +178,11 @@ export async function extractMarkersFromItinerary(
               description: activity.description,
               label: activity.activity || location,
             });
-
-            console.log(`✓ 地理编码成功: ${location}`);
           } else {
-            console.warn(`✗ 地理编码失败: ${location} (原始: ${rawLocation})`);
+            console.warn(`地理编码失败: ${location}`);
           }
         } catch (error) {
-          console.error(`✗ 地理编码异常: ${location}`, error);
+          console.error(`地理编码异常: ${location}`, error);
         }
       })();
 
@@ -202,12 +191,8 @@ export async function extractMarkersFromItinerary(
   }
 
   // 等待所有地理编码完成（并发执行）
-  console.log(`等待 ${geocodeTasks.length} 个地理编码任务完成...`);
   await Promise.all(geocodeTasks);
 
-  console.log(
-    `地图标记提取完成，成功: ${markers.length}/${geocodeTasks.length}`
-  );
   return markers;
 }
 
@@ -219,8 +204,6 @@ export async function extractRoutesFromItinerary(
   markers: MapMarker[]
 ): Promise<MapRoute[]> {
   const routes: MapRoute[] = [];
-
-  console.log(`开始提取路线，使用已有的 ${markers.length} 个标记`);
 
   // 创建地址到坐标的映射
   const locationMap = new Map<string, { lat: number; lng: number }>();
@@ -275,7 +258,6 @@ export async function extractRoutesFromItinerary(
     }
   }
 
-  console.log(`路线提取完成，共 ${routes.length} 条路线`);
   return routes;
 }
 

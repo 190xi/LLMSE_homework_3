@@ -40,31 +40,22 @@ export function TripMap({
 
   // 初始化地图
   useEffect(() => {
-    console.log('[TripMap] 初始化 effect 触发');
-
     // 使用 setTimeout 确保 DOM 已经渲染
     const timer = setTimeout(() => {
       if (!mapContainer.current) {
-        console.log('[TripMap] mapContainer.current 仍不存在，设置错误状态');
         setError('地图容器初始化失败');
         setIsLoading(false);
         return;
       }
 
-      console.log('[TripMap] mapContainer.current 存在，开始初始化地图');
-
       const initMap = async () => {
         try {
-          console.log('[TripMap] 1. 开始初始化，设置 loading = true');
           setIsLoading(true);
           setError(null);
 
-          console.log('[TripMap] 2. 加载 AMap SDK...');
           const AMapInstance = await loadAMap();
-          console.log('[TripMap] 3. AMap SDK 加载完成');
           setAMap(AMapInstance);
 
-          console.log('[TripMap] 4. 创建地图实例...');
           // 创建地图实例
           const mapInstance = new AMapInstance.Map(mapContainer.current, {
             zoom: options.zoom || 12,
@@ -72,7 +63,6 @@ export function TripMap({
             resizeEnable: true,
             mapStyle: 'amap://styles/normal', // 标准样式
           });
-          console.log('[TripMap] 5. 地图实例创建完成');
 
           // 添加控件
           if (options.showZoomControl !== false) {
@@ -83,13 +73,10 @@ export function TripMap({
             mapInstance.addControl(new AMapInstance.Scale());
           }
 
-          console.log('[TripMap] 6. 设置 map 实例并设置 loading = false');
           setMap(mapInstance);
           setIsLoading(false);
-
-          console.log('[TripMap] 7. 地图初始化成功！');
         } catch (err) {
-          console.error('[TripMap] 地图初始化失败:', err);
+          console.error('地图初始化失败:', err);
           setError('地图加载失败，请刷新页面重试');
           setIsLoading(false);
         }
@@ -101,7 +88,6 @@ export function TripMap({
     // 清理函数
     return () => {
       clearTimeout(timer);
-      console.log('[TripMap] 清理函数调用');
       if (map) {
         map.destroy();
       }
@@ -111,13 +97,6 @@ export function TripMap({
   // 更新标记点
   useEffect(() => {
     if (!map || !AMap || markers.length === 0) return;
-
-    console.log('[TripMap] 开始更新标记点，数量:', markers.length);
-    markers.forEach((m, idx) => {
-      console.log(
-        `[TripMap] 标记 ${idx + 1}: ${m.name} - 经度: ${m.lng}, 纬度: ${m.lat}`
-      );
-    });
 
     // 清除旧标记
     markersRef.current.forEach((marker) => marker.setMap(null));

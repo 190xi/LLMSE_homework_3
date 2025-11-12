@@ -36,7 +36,6 @@ export async function loadAMap(): Promise<any> {
     (window as any)._AMapSecurityConfig = {
       securityJsCode: securityCode || '',
     };
-    console.log('高德地图安全密钥已设置');
   }
 
   // 如果已经加载，直接返回
@@ -97,13 +96,8 @@ export async function geocodeAddress(
   lng: number;
   lat: number;
 } | null> {
-  console.log(
-    `[geocodeAddress] 开始处理: "${address}"${city ? ` (城市: ${city})` : ''}`
-  );
-
   try {
     const AMap = await loadAMap();
-    console.log(`[geocodeAddress] AMap实例获取成功`);
 
     let callbackFired = false;
     let timeoutFired = false;
@@ -111,52 +105,33 @@ export async function geocodeAddress(
     return await Promise.race([
       new Promise<{ lng: number; lat: number } | null>((resolve) => {
         try {
-          console.log(`[geocodeAddress] 创建Geocoder...`);
           const geocoder = new AMap.Geocoder({
             city: city || '全国',
           });
-          console.log(
-            `[geocodeAddress] Geocoder创建成功，城市: ${city || '全国'}`
-          );
 
-          console.log(`[geocodeAddress] 调用getLocation("${address}")...`);
           geocoder.getLocation(address, (status: string, result: any) => {
-            if (timeoutFired) {
-              return;
-            }
+            if (timeoutFired) return;
 
             callbackFired = true;
-            console.log(`[geocodeAddress] 回调触发!`, {
-              address,
-              status,
-              result,
-            });
 
             if (status === 'complete' && result.info === 'OK') {
               if (result.geocodes && result.geocodes.length > 0) {
                 const location = result.geocodes[0].location;
-                console.log(`[geocodeAddress] 成功: ${address}`, {
-                  lng: location.lng,
-                  lat: location.lat,
-                });
                 resolve({
                   lng: location.lng,
                   lat: location.lat,
                 });
               } else {
-                console.warn(`[geocodeAddress] 无结果: ${address}`);
+                console.warn(`地理编码无结果: ${address}`);
                 resolve(null);
               }
             } else {
-              console.warn(
-                `[geocodeAddress] 失败: ${address} - status: ${status}`
-              );
+              console.warn(`地理编码失败: ${address} - status: ${status}`);
               resolve(null);
             }
           });
-          console.log(`[geocodeAddress] getLocation已调用，等待回调...`);
         } catch (error) {
-          console.error(`[geocodeAddress] Geocoder异常:`, error);
+          console.error('地理编码异常:', error);
           resolve(null);
         }
       }),
@@ -164,14 +139,14 @@ export async function geocodeAddress(
         setTimeout(() => {
           timeoutFired = true;
           if (!callbackFired) {
-            console.warn(`[geocodeAddress] 超时: ${address} - 回调未触发`);
+            console.warn(`地理编码超时: ${address}`);
           }
           resolve(null);
         }, timeout)
       ),
     ]);
   } catch (error) {
-    console.error(`[geocodeAddress] 异常:`, error);
+    console.error('地理编码错误:', error);
     return null;
   }
 }
