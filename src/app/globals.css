@@ -60,3 +60,16 @@
       Arial, sans-serif;
   }
 }
+
+/* 地图标记脉冲动画 */
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5);
+  }
+}

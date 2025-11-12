@@ -19,6 +19,8 @@ interface TripMapProps {
   onMarkerClick?: (marker: MapMarker) => void;
   /** 是否显示导航按钮 */
   showNavigation?: boolean;
+  /** 选中的标记ID（用于高亮和定位） */
+  selectedMarkerId?: string;
 }
 
 export function TripMap({
@@ -28,6 +30,7 @@ export function TripMap({
   height = '500px',
   onMarkerClick,
   showNavigation = true,
+  selectedMarkerId,
 }: TripMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<any>(null);
@@ -37,6 +40,8 @@ export function TripMap({
 
   const markersRef = useRef<any[]>([]);
   const polylinesRef = useRef<any[]>([]);
+  const infoWindowRef = useRef<any>(null);
+  const markersDataRef = useRef<MapMarker[]>([]); // 存储标记数据
 
   // 初始化地图
   useEffect(() => {
@@ -73,6 +78,13 @@ export function TripMap({
             mapInstance.addControl(new AMapInstance.Scale());
           }
 
+          // 创建信息窗口
+          const infoWindow = new AMapInstance.InfoWindow({
+            isCustom: false,
+            offset: new AMapInstance.Pixel(0, -30),
+          });
+          infoWindowRef.current = infoWindow;
+
           setMap(mapInstance);
           setIsLoading(false);
         } catch (err) {
@@ -96,22 +108,30 @@ export function TripMap({
 
   // 更新标记点
   useEffect(() => {
-    if (!map || !AMap || markers.length === 0) return;
+    if (!map || !AMap) return;
 
     // 清除旧标记
     markersRef.current.forEach((marker) => marker.setMap(null));
     markersRef.current = [];
+    markersDataRef.current = []; // 清除标记数据
+
+    // 如果没有标记，直接返回
+    if (markers.length === 0) {
+      console.log('[TripMap] 没有标记点数据');
+      return;
+    }
+
+    console.log('[TripMap] 添加标记点:', markers.length);
 
     // 添加新标记
     const newMarkers: any[] = [];
     const bounds: any[] = [];
 
-    markers.forEach((markerData) => {
+    markers.forEach((markerData, index) => {
       const position = new AMap.LngLat(markerData.lng, markerData.lat);
       bounds.push(position);
 
       // 根据类型选择图标
-      const iconUrl = '';
       let iconColor = '#1890ff';
 
       switch (markerData.type) {
@@ -131,12 +151,8 @@ export function TripMap({
       const marker = new AMap.Marker({
         position: position,
         title: markerData.name,
-        label: {
-          content: markerData.label || markerData.name,
-          offset: new AMap.Pixel(0, -30),
-        },
         // 使用 HTML 自定义标记样式
-        content: `<div style="
+        content: `<div data-marker-id="${markerData.id}" style="
           background-color: ${iconColor};
           color: white;
           padding: 8px 12px;
@@ -150,21 +166,71 @@ export function TripMap({
 
       // 点击事件
       marker.on('click', () => {
+        // 显示信息窗口
+        if (infoWindowRef.current) {
+          const content = `
+            <div style="padding: 12px; min-width: 200px;">
+              <h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #1f2937;">
+                ${markerData.name}
+              </h4>
+              ${
+                markerData.address
+                  ? `
+                <p style="margin: 4px 0; font-size: 13px; color: #6b7280;">
+                  📍 ${markerData.address}
+                </p>
+              `
+                  : ''
+              }
+              ${
+                markerData.description
+                  ? `
+                <p style="margin: 8px 0 0 0; font-size: 13px; color: #374151;">
+                  ${markerData.description}
+                </p>
+              `
+                  : ''
+              }
+            </div>
+          `;
+          infoWindowRef.current.setContent(content);
+          infoWindowRef.current.open(map, position);
+        }
+
+        // 调用回调
         onMarkerClick?.(markerData);
       });
 
       newMarkers.push(marker);
+      // 存储标记数据，用于后续查找
+      markersDataRef.current.push(markerData);
     });
 
     // 将标记添加到地图
     map.add(newMarkers);
     markersRef.current = newMarkers;
 
+    console.log('[TripMap] 标记添加完成，调整视野');
+
     // 自动调整视野以显示所有标记
     if (bounds.length > 0) {
       map.setFitView(newMarkers, false, [50, 50, 50, 50]);
     }
   }, [map, AMap, markers, onMarkerClick]);
+
+  // 更新地图中心点和缩放级别
+  useEffect(() => {
+    if (!map || !options) return;
+
+    console.log('[TripMap] 更新地图中心和缩放:', options);
+
+    if (options.center) {
+      map.setCenter(options.center);
+    }
+    if (options.zoom) {
+      map.setZoom(options.zoom);
+    }
+  }, [map, options]);
 
   // 更新路线
   useEffect(() => {
@@ -199,6 +265,59 @@ export function TripMap({
     map.add(newPolylines);
     polylinesRef.current = newPolylines;
   }, [map, AMap, routes]);
+
+  // 当选中标记改变时，定位并高亮显示
+  useEffect(() => {
+    if (!map || !AMap || !selectedMarkerId) return;
+
+    console.log('[TripMap] 定位到标记:', selectedMarkerId);
+    console.log(
+      '[TripMap] 可用标记数据:',
+      markersDataRef.current.map((m) => ({ id: m.id, name: m.name }))
+    );
+
+    // 通过存储的标记数据查找对应的 AMap 标记对象
+    const markerIndex = markersDataRef.current.findIndex(
+      (markerData) => markerData.id === selectedMarkerId
+    );
+
+    if (markerIndex === -1) {
+      console.warn('[TripMap] 未找到标记数据:', selectedMarkerId);
+      return;
+    }
+
+    const selectedMarker = markersRef.current[markerIndex];
+    if (!selectedMarker) {
+      console.warn(
+        '[TripMap] 未找到标记对象:',
+        selectedMarkerId,
+        'index:',
+        markerIndex
+      );
+      return;
+    }
+
+    console.log('[TripMap] 找到标记，准备定位');
+
+    const position = selectedMarker.getPosition();
+
+    // 先设置缩放级别和中心点
+    map.setZoomAndCenter(16, position);
+
+    // 延迟打开信息窗口，确保地图先定位完成
+    setTimeout(() => {
+      // 打开信息窗口
+      if (infoWindowRef.current) {
+        // 触发标记点击事件来显示信息窗口
+        selectedMarker.emit('click');
+      }
+
+      // 信息窗口打开后，再次调整中心点以确保标记在屏幕中央
+      setTimeout(() => {
+        map.setCenter(position);
+      }, 100);
+    }, 300);
+  }, [map, AMap, selectedMarkerId]);
 
   // 导航到第一个标记点
   const handleNavigate = () => {

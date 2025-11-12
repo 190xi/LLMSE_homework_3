@@ -30,6 +30,8 @@ export interface MapMarker extends MapLocation {
   icon?: string;
   /** 标签文字 */
   label?: string;
+  /** 所属天数 */
+  day?: number;
 }
 
 /**
@@ -46,6 +48,8 @@ export interface MapRoute {
   color?: string;
   /** 路线宽度 */
   width?: number;
+  /** 所属天数 */
+  day?: number;
 }
 
 /**

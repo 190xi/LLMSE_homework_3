@@ -177,6 +177,7 @@ export async function extractMarkersFromItinerary(
               type: type,
               description: activity.description,
               label: activity.activity || location,
+              day: day.day, // 添加天数属性
             });
           } else {
             console.warn(`地理编码失败: ${location}`);
@@ -254,6 +255,7 @@ export async function extractRoutesFromItinerary(
         path: dayLocations,
         color: colors[(day.day - 1) % colors.length],
         width: 6,
+        day: day.day, // 添加天数属性
       });
     }
   }
