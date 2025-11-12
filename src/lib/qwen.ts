@@ -29,7 +29,7 @@ interface ItineraryData {
 /**
  * 创建阿里云通义千问客户端（兼容OpenAI SDK）
  */
-function createQwenClient() {
+export function createQwenClient() {
   const apiKey = process.env.DASHSCOPE_API_KEY;
 
   if (!apiKey) {
@@ -42,6 +42,9 @@ function createQwenClient() {
   });
 }
 
+// 创建一个全局客户端实例供复用
+export const qwenClient = createQwenClient();
+
 /**
  * 调用阿里云通义千问API
  * @param messages 对话消息列表
@@ -53,9 +56,7 @@ export async function callQwenAPI(
   model: 'qwen-turbo' | 'qwen-plus' | 'qwen-max' = 'qwen-plus'
 ): Promise<string> {
   try {
-    const client = createQwenClient();
-
-    const response = await client.chat.completions.create({
+    const response = await qwenClient.chat.completions.create({
       model: model,
       messages: messages,
     });

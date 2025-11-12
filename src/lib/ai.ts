@@ -29,6 +29,7 @@ export interface TripGenerationParams {
     travelStyle?: string[];
     accommodationLevel?: string;
     transportPreference?: string;
+    customPreferences?: string; // 自由文本偏好
   };
 }
 
@@ -95,6 +96,7 @@ export async function generateTripItinerary(
 ${preferences?.travelStyle?.length ? `旅行风格：${preferences.travelStyle.join('、')}` : ''}
 ${preferences?.accommodationLevel ? `住宿档次：${preferences.accommodationLevel}` : ''}
 ${preferences?.transportPreference ? `交通偏好：${preferences.transportPreference}` : ''}
+${preferences?.customPreferences ? `其他特殊需求或偏好：${preferences.customPreferences}` : ''}
 
 请以JSON格式返回行程计划，格式如下：
 {
