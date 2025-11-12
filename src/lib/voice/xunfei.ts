@@ -36,6 +36,7 @@ export class XunfeiRecognizer {
       audioEncoding: 'raw',
       sampleRate: '16000',
       ptt: 1, // 返回标点符号
+      vinfo: 1, // 开启流式返回，减少延迟
       ...params,
     };
   }
@@ -206,16 +207,6 @@ export class XunfeiRecognizer {
     if (data.result) {
       const ws = data.result.ws;
       if (ws && Array.isArray(ws) && ws.length > 0) {
-        // 检查是否是新段落开始（第一个词的 bg=0）
-        const isNewSegment = ws[0].bg === 0;
-
-        if (isNewSegment && this.currentSegmentText) {
-          // 新段落开始，将之前的段落文本追加到结果中
-          console.log('新段落开始，确认上一段:', this.currentSegmentText);
-          this.resultText += this.currentSegmentText;
-          this.currentSegmentText = '';
-        }
-
         // 解析当前帧的文本
         let frameText = '';
         ws.forEach((item: any) => {
@@ -226,49 +217,54 @@ export class XunfeiRecognizer {
           }
         });
 
-        // 更新当前段落文本
-        this.currentSegmentText = frameText;
-
-        console.log('当前段落文本:', this.currentSegmentText);
-        console.log('已确认文本:', this.resultText);
-
         // 判断是否为整个识别会话的结束
         const isSessionEnd = data.status === 2;
         console.log(
           '会话状态 data.status:',
           data.status,
           '是否结束:',
-          isSessionEnd
+          isSessionEnd,
+          '当前帧文本:',
+          frameText
         );
 
-        // 构建完整文本（已确认 + 当前段落）
-        const fullText = this.resultText + this.currentSegmentText;
-
-        const result: RecognitionResult = {
-          text: fullText,
-          isFinal: isSessionEnd, // 只有会话结束时才是最终结果
-          confidence: data.confidence,
-        };
-
-        console.log('触发onResult回调:', {
-          fullText,
-          isFinal: isSessionEnd,
-          resultText: this.resultText,
-          currentSegment: this.currentSegmentText,
-        });
-
-        this.listeners.onResult?.(result);
-
-        // 如果是会话结束，触发完成回调
         if (isSessionEnd) {
-          // 确认最后一段文本
-          this.resultText += this.currentSegmentText;
-          this.currentSegmentText = '';
+          // 会话结束：使用之前的实时识别文本作为最终结果
+          // 注意：最后一帧可能只包含标点符号，所以优先使用 currentSegmentText
+          if (this.currentSegmentText) {
+            this.resultText = this.currentSegmentText;
+          } else if (frameText) {
+            this.resultText = frameText;
+          }
 
           console.log('识别完成，最终结果:', this.resultText);
+
+          const result: RecognitionResult = {
+            text: this.resultText,
+            isFinal: true,
+            confidence: data.confidence,
+          };
+
+          this.listeners.onResult?.(result);
           this.updateStatus('completed');
           this.listeners.onComplete?.(this.resultText);
+
+          // 清理状态
+          this.currentSegmentText = '';
           this.cleanup();
+        } else {
+          // 实时识别中：这是临时结果，直接替换（不累积）
+          this.currentSegmentText = frameText;
+
+          console.log('实时识别文本:', this.currentSegmentText);
+
+          const result: RecognitionResult = {
+            text: this.currentSegmentText,
+            isFinal: false,
+            confidence: data.confidence,
+          };
+
+          this.listeners.onResult?.(result);
         }
       } else {
         console.warn('ws字段为空或不是数组');
@@ -323,9 +319,12 @@ export class XunfeiRecognizer {
         language: this.params.language,
         domain: this.params.domain,
         accent: 'mandarin', // 普通话
-        vad_eos: 5000, // 后端点检测超时时间
+        vad_eos: 1500, // 后端点检测超时时间 (从5000ms降低到1500ms，提升响应速度)
         dwa: 'wpgs', // 动态修正
         ptt: this.params.ptt, // 标点符号
+        pd: 'travel', // 领域：旅游场景，提高识别准确度
+        rlang: 'zh-cn', // 原始音频语言
+        nunum: 1, // 将数字转为阿拉伯数字
       },
       data: {
         status: 0, // 0: 第一帧

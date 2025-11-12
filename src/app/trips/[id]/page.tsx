@@ -2,8 +2,9 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -24,7 +25,32 @@ import {
   Loader2,
   Clock,
   MapPinIcon,
+  Plus,
+  ArrowRight,
 } from 'lucide-react';
+import type { Expense, ExpenseStats } from '@/types/expense';
+import type { MapMarker, MapRoute } from '@/types/map';
+
+// 动态导入地图组件，禁用SSR
+const TripMap = dynamic(
+  () => import('@/components/map/TripMap').then((mod) => mod.TripMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <p className="ml-3 text-sm text-gray-600">正在加载地图组件...</p>
+      </div>
+    ),
+  }
+);
+
+// 动态导入地图工具函数，禁用SSR
+const loadMapUtils = () =>
+  import('@/lib/map/map-utils').then((mod) => ({
+    extractMarkersFromItinerary: mod.extractMarkersFromItinerary,
+    extractRoutesFromItinerary: mod.extractRoutesFromItinerary,
+  }));
 
 interface ItineraryDay {
   day: number;
@@ -66,6 +92,30 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
   const [error, setError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
+  // 费用相关状态
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenseStats, setExpenseStats] = useState<ExpenseStats | null>(null);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
+
+  // 地图相关状态
+  const [mapMarkers, setMapMarkers] = useState<MapMarker[]>([]);
+  const [mapRoutes, setMapRoutes] = useState<MapRoute[]>([]);
+  const [isLoadingMap, setIsLoadingMap] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  // 使用 ref 追踪是否正在加载，防止并发加载
+  const isLoadingMapRef = useRef(false);
+
+  // 监听 isLoadingMap 状态变化
+  useEffect(() => {
+    console.log('[状态监听] isLoadingMap 变化:', isLoadingMap);
+  }, [isLoadingMap]);
+
+  // 监听 mapMarkers 状态变化
+  useEffect(() => {
+    console.log('[状态监听] mapMarkers 变化, 数量:', mapMarkers.length);
+  }, [mapMarkers]);
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
@@ -75,6 +125,7 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchTrip();
+      fetchExpenses();
     }
   }, [status, params.id]);
 
@@ -96,6 +147,180 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
       setIsLoading(false);
     }
   };
+
+  const fetchExpenses = async () => {
+    try {
+      setIsLoadingExpenses(true);
+
+      // 并行加载费用列表和统计数据
+      const [expensesRes, statsRes] = await Promise.all([
+        fetch(`/api/trips/${params.id}/expenses`),
+        fetch(`/api/trips/${params.id}/expenses/stats`),
+      ]);
+
+      if (expensesRes.ok) {
+        const expensesData = await expensesRes.json();
+        setExpenses(expensesData.expenses || []);
+      }
+
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setExpenseStats(statsData.stats);
+      }
+    } catch (err) {
+      console.error('Error fetching expenses:', err);
+    } finally {
+      setIsLoadingExpenses(false);
+    }
+  };
+
+  // 从行程中提取地图数据
+  useEffect(() => {
+    console.log('[useEffect] 地图数据提取 effect 触发');
+    let cancelled = false;
+
+    const extractMapData = async () => {
+      if (!trip?.itinerary || trip.itinerary.length === 0) {
+        setMapMarkers([]);
+        setMapRoutes([]);
+        setIsLoadingMap(false);
+        setMapError(null);
+        console.log('[useEffect] 无行程数据，跳过');
+        return;
+      }
+
+      console.log('当前目的地:', trip.destination);
+
+      // 检测是否为国内目的地 - 简化逻辑
+      const destination = (trip.destination || '').toLowerCase();
+
+      // 检查是否为海外目的地
+      const isOverseas =
+        destination.includes('日本') ||
+        destination.includes('东京') ||
+        destination.includes('大阪') ||
+        destination.includes('京都') ||
+        destination.includes('韩国') ||
+        destination.includes('首尔') ||
+        destination.includes('泰国') ||
+        destination.includes('曼谷') ||
+        destination.includes('新加坡') ||
+        destination.includes('马来西亚') ||
+        destination.includes('美国') ||
+        destination.includes('英国') ||
+        destination.includes('法国') ||
+        destination.includes('德国') ||
+        destination.includes('意大利') ||
+        destination.includes('澳大利亚');
+
+      console.log('是否为海外目的地:', isOverseas);
+
+      if (isOverseas) {
+        setMapError(
+          '地图功能目前仅支持中国境内目的地。对于海外旅行，建议使用 Google Maps 等国际地图服务。'
+        );
+        setMapMarkers([]);
+        setMapRoutes([]);
+        setIsLoadingMap(false);
+        console.log('[useEffect] 海外目的地，跳过');
+        return;
+      }
+
+      try {
+        console.log('[地图加载] 1. 开始加载');
+        setIsLoadingMap(true);
+        setMapError(null);
+
+        // 动态加载地图工具函数
+        console.log('[地图加载] 1.5. 动态加载地图工具函数');
+        const mapUtils = await loadMapUtils();
+
+        if (cancelled) {
+          console.log('[地图加载] 已取消，退出');
+          return;
+        }
+
+        console.log('[地图加载] 2. 开始提取标记和路线');
+        // 先提取标记，再基于标记生成路线（避免重复地理编码）
+        console.log(
+          '[地图加载] 3a. 调用 extractMarkersFromItinerary，目的地:',
+          trip.destination
+        );
+        const markers = await mapUtils.extractMarkersFromItinerary(
+          trip.itinerary,
+          trip.destination
+        );
+        console.log('[地图加载] 3b. markers 提取完成，数量:', markers.length);
+
+        if (cancelled) {
+          console.log('[地图加载] 已取消(markers后)，退出');
+          return;
+        }
+
+        console.log('[地图加载] 4a. 调用 extractRoutesFromItinerary');
+        const routes = await mapUtils.extractRoutesFromItinerary(
+          trip.itinerary,
+          markers
+        );
+        console.log('[地图加载] 4b. routes 提取完成，数量:', routes.length);
+
+        if (cancelled) {
+          console.log('[地图加载] 已取消(routes后)，退出');
+          return;
+        }
+
+        console.log(
+          '[地图加载] 5. 提取完成 - 标记数:',
+          markers.length,
+          '路线数:',
+          routes.length
+        );
+
+        setMapMarkers(markers);
+        setMapRoutes(routes);
+
+        // 如果没有提取到任何标记，设置提示信息
+        if (markers.length === 0) {
+          setMapError(
+            '未能从行程中提取到有效的地理位置信息，这可能是由于高德地图API配额限制或网络问题'
+          );
+        }
+
+        console.log('[地图加载] 6. try块执行完成');
+      } catch (err) {
+        if (cancelled) {
+          console.log('[地图加载] 已取消(catch)，退出');
+          return;
+        }
+
+        console.error('[地图加载] 7. 捕获到错误:', err);
+        const errorMessage =
+          err instanceof Error ? err.message : '地图数据加载失败';
+        setMapError(errorMessage);
+        // 即使出错也要设置空数据，避免一直loading
+        setMapMarkers([]);
+        setMapRoutes([]);
+      } finally {
+        if (!cancelled) {
+          console.log(
+            '[地图加载] 8. finally块执行 - 设置 isLoadingMap = false'
+          );
+          setIsLoadingMap(false);
+          console.log('[地图加载] 9. 完成！isLoadingMap应该为false');
+        } else {
+          console.log('[地图加载] 已取消(finally)，不设置状态');
+        }
+      }
+    };
+
+    extractMapData();
+
+    // 清理函数
+    return () => {
+      console.log('[useEffect] 清理函数调用 - 取消地图加载');
+      cancelled = true;
+    };
+  }, [trip?.itinerary, trip?.destination]);
 
   const handleGenerateItinerary = async () => {
     try {
@@ -180,6 +405,51 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
         new Date(trip.start_date).getTime()) /
         (1000 * 60 * 60 * 24)
     ) + 1;
+
+  // 计算地图中心点（内联函数，避免SSR问题）
+  const calculateMapCenter = (markers: MapMarker[]) => {
+    if (markers.length === 0) {
+      return {
+        center: [116.397428, 39.90923] as [number, number], // 默认北京
+        zoom: 12,
+      };
+    }
+
+    if (markers.length === 1) {
+      return {
+        center: [markers[0].lng, markers[0].lat] as [number, number],
+        zoom: 15,
+      };
+    }
+
+    // 计算所有点的中心
+    const sumLng = markers.reduce((sum, m) => sum + m.lng, 0);
+    const sumLat = markers.reduce((sum, m) => sum + m.lat, 0);
+
+    const centerLng = sumLng / markers.length;
+    const centerLat = sumLat / markers.length;
+
+    // 计算跨度来决定缩放级别
+    const lngSpan =
+      Math.max(...markers.map((m) => m.lng)) -
+      Math.min(...markers.map((m) => m.lng));
+    const latSpan =
+      Math.max(...markers.map((m) => m.lat)) -
+      Math.min(...markers.map((m) => m.lat));
+    const maxSpan = Math.max(lngSpan, latSpan);
+
+    let zoom = 12;
+    if (maxSpan > 10) zoom = 5;
+    else if (maxSpan > 5) zoom = 7;
+    else if (maxSpan > 1) zoom = 10;
+    else if (maxSpan > 0.5) zoom = 12;
+    else zoom = 14;
+
+    return {
+      center: [centerLng, centerLat] as [number, number],
+      zoom,
+    };
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -392,28 +662,265 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
               </CardContent>
             </Card>
 
+            {/* Map Section */}
+            {trip.itinerary && trip.itinerary.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>地图与导航</CardTitle>
+                  <CardDescription>
+                    查看行程地点分布和每日路线规划
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    console.log(
+                      '[渲染检查] isLoadingMap:',
+                      isLoadingMap,
+                      'mapError:',
+                      mapError,
+                      'mapMarkers.length:',
+                      mapMarkers.length
+                    );
+
+                    if (isLoadingMap) {
+                      console.log('[渲染检查] 显示加载中状态');
+                      return (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                          <p className="ml-3 text-sm text-gray-600">
+                            正在加载地图数据...
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    if (mapError) {
+                      console.log('[渲染检查] 显示错误状态');
+                      return (
+                        <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 py-12 text-center">
+                          <MapPin className="mb-4 h-12 w-12 text-gray-400" />
+                          <p className="mb-2 text-sm font-medium text-gray-900">
+                            地图加载失败
+                          </p>
+                          <p className="text-sm text-gray-600">{mapError}</p>
+                        </div>
+                      );
+                    }
+
+                    if (mapMarkers.length > 0) {
+                      console.log(
+                        '[渲染检查] 渲染 TripMap 组件，标记数:',
+                        mapMarkers.length
+                      );
+                      return (
+                        <div className="space-y-4">
+                          {/* 地图展示 */}
+                          <TripMap
+                            markers={mapMarkers}
+                            routes={mapRoutes}
+                            options={calculateMapCenter(mapMarkers)}
+                            height="500px"
+                            onMarkerClick={(marker) => {
+                              console.log('Marker clicked:', marker);
+                            }}
+                            showNavigation={true}
+                          />
+
+                          {/* 地点统计 */}
+                          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div className="rounded-lg bg-green-50 p-3 text-center">
+                              <p className="text-2xl font-bold text-green-600">
+                                {
+                                  mapMarkers.filter(
+                                    (m) => m.type === 'attraction'
+                                  ).length
+                                }
+                              </p>
+                              <p className="text-sm text-gray-600">景点</p>
+                            </div>
+                            <div className="rounded-lg bg-orange-50 p-3 text-center">
+                              <p className="text-2xl font-bold text-orange-600">
+                                {
+                                  mapMarkers.filter(
+                                    (m) => m.type === 'restaurant'
+                                  ).length
+                                }
+                              </p>
+                              <p className="text-sm text-gray-600">餐厅</p>
+                            </div>
+                            <div className="rounded-lg bg-purple-50 p-3 text-center">
+                              <p className="text-2xl font-bold text-purple-600">
+                                {
+                                  mapMarkers.filter((m) => m.type === 'hotel')
+                                    .length
+                                }
+                              </p>
+                              <p className="text-sm text-gray-600">酒店</p>
+                            </div>
+                            <div className="rounded-lg bg-blue-50 p-3 text-center">
+                              <p className="text-2xl font-bold text-blue-600">
+                                {mapRoutes.length}
+                              </p>
+                              <p className="text-sm text-gray-600">路线</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    console.log('[渲染检查] 显示空状态');
+                    return (
+                      <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 py-12 text-center">
+                        <MapPin className="mb-4 h-12 w-12 text-gray-400" />
+                        <p className="text-gray-600">
+                          未能提取地图数据，请确保行程中包含具体的地点信息
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Expenses Section */}
             <Card>
               <CardHeader>
-                <CardTitle>费用记录</CardTitle>
-                <CardDescription>记录和管理旅行花费</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="mb-4 rounded-full bg-green-100 p-6">
-                    <DollarSign className="h-12 w-12 text-green-600" />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>费用记录</CardTitle>
+                    <CardDescription>记录和管理旅行花费</CardDescription>
                   </div>
-                  <h3 className="mb-2 text-xl font-semibold text-gray-900">
-                    还没有费用记录
-                  </h3>
-                  <p className="mb-6 max-w-md text-gray-600">
-                    开始记录您的旅行花费，轻松掌控预算
-                  </p>
-                  <Button size="lg" variant="outline">
-                    <DollarSign className="mr-2 h-5 w-5" />
-                    添加费用
+                  <Button size="sm" asChild>
+                    <Link href={`/trips/${params.id}/expenses`}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      添加费用
+                    </Link>
                   </Button>
                 </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingExpenses ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                  </div>
+                ) : expenseStats && expenseStats.expense_count > 0 ? (
+                  <div className="space-y-4">
+                    {/* 预算统计 */}
+                    <div className="rounded-lg bg-gradient-to-r from-indigo-50 to-purple-50 p-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">总预算</p>
+                          <p className="text-2xl font-bold text-gray-900">
+                            ¥{trip?.total_budget.toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">已花费</p>
+                          <p className="text-2xl font-bold text-indigo-600">
+                            ¥{expenseStats.total_spent.toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">剩余预算</p>
+                          <p
+                            className={`text-xl font-semibold ${
+                              expenseStats.remaining_budget >= 0
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}
+                          >
+                            ¥{expenseStats.remaining_budget.toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">预算使用</p>
+                          <p className="text-xl font-semibold text-gray-700">
+                            {expenseStats.budget_usage_percentage.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 预算进度条 */}
+                      <div className="mt-4">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className={`h-full transition-all ${
+                              expenseStats.budget_usage_percentage > 100
+                                ? 'bg-red-500'
+                                : expenseStats.budget_usage_percentage > 80
+                                  ? 'bg-yellow-500'
+                                  : 'bg-green-500'
+                            }`}
+                            style={{
+                              width: `${Math.min(expenseStats.budget_usage_percentage, 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 最近费用记录 */}
+                    <div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h4 className="font-semibold text-gray-900">
+                          最近记录 ({expenseStats.expense_count} 条)
+                        </h4>
+                      </div>
+                      <div className="space-y-2">
+                        {expenses.slice(0, 3).map((expense) => (
+                          <div
+                            key={expense.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 p-3"
+                          >
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">
+                                {expense.description || '未分类'}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {new Date(
+                                  expense.recorded_at
+                                ).toLocaleDateString('zh-CN')}
+                              </p>
+                            </div>
+                            <p className="text-lg font-semibold text-gray-900">
+                              ¥{expense.amount.toLocaleString()}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 查看全部按钮 */}
+                    <Button variant="outline" className="w-full" asChild>
+                      <Link
+                        href={`/trips/${params.id}/expenses`}
+                        className="flex items-center justify-center"
+                      >
+                        查看全部费用记录
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  // 空状态
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="mb-4 rounded-full bg-green-100 p-6">
+                      <DollarSign className="h-12 w-12 text-green-600" />
+                    </div>
+                    <h3 className="mb-2 text-xl font-semibold text-gray-900">
+                      还没有费用记录
+                    </h3>
+                    <p className="mb-6 max-w-md text-gray-600">
+                      开始记录您的旅行花费，轻松掌控预算
+                    </p>
+                    <Button size="lg" variant="outline" asChild>
+                      <Link href={`/trips/${params.id}/expenses`}>
+                        <Plus className="mr-2 h-5 w-5" />
+                        添加费用
+                      </Link>
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

@@ -56,6 +56,13 @@ export async function POST(request: NextRequest) {
     // Validate request body
     const validatedData = createTripSchema.parse(body);
 
+    console.log('Creating trip with data:', {
+      userId: session.user.id,
+      destination: validatedData.destination,
+      startDate: validatedData.startDate,
+      endDate: validatedData.endDate,
+    });
+
     // Create trip in database
     const { data: trip, error } = await supabase
       .from('trips')
@@ -74,10 +81,16 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error creating trip:', error);
+      console.error('Error creating trip:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       return NextResponse.json({ error: '创建行程失败' }, { status: 500 });
     }
 
+    console.log('Trip created successfully:', trip.id);
     return NextResponse.json({ trip }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -87,7 +100,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error('Create trip error:', error);
+    console.error('Create trip error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      details:
+        error instanceof Error ? error.stack : JSON.stringify(error, null, 2),
+      hint: '',
+      code: '',
+    });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

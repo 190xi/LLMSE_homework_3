@@ -53,4 +53,6 @@ export interface XunfeiParams {
   sampleRate?: '16000' | '8000';
   /** 是否返回标点符号 */
   ptt?: 0 | 1;
+  /** 是否开启流式返回 (1: 开启, 0: 关闭) */
+  vinfo?: 0 | 1;
 }

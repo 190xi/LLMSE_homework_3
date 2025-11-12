@@ -27,7 +27,7 @@ export class PCMRecorder {
   } = {};
 
   private readonly targetSampleRate = 16000; // 科大讯飞要求 16kHz
-  private readonly bufferSize = 4096; // 处理缓冲区大小
+  private readonly bufferSize = 1024; // 处理缓冲区大小 (64ms @ 16kHz，提升实时响应速度)
 
   /**
    * 开始录音
@@ -53,9 +53,9 @@ export class PCMRecorder {
         audio: {
           sampleRate: this.targetSampleRate,
           channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: true, // 回声消除
+          noiseSuppression: true, // 噪声抑制
+          autoGainControl: true, // 自动增益控制
         },
       });
 
