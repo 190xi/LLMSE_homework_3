@@ -21,8 +21,6 @@ import {
   DollarSign,
   Users,
   Loader2,
-  Mic,
-  Edit3,
   Heart,
 } from 'lucide-react';
 import { z } from 'zod';
@@ -61,7 +59,6 @@ export function CreateTripForm() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showVoiceInput, setShowVoiceInput] = useState(true);
 
   const {
     register,
@@ -167,46 +164,28 @@ export function CreateTripForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* 输入方式切换 */}
-      <div className="flex items-center justify-center gap-2">
-        <Button
-          type="button"
-          variant={showVoiceInput ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setShowVoiceInput(true)}
-          className="flex items-center gap-2"
-        >
-          <Mic className="h-4 w-4" />
-          语音输入
-        </Button>
-        <Button
-          type="button"
-          variant={!showVoiceInput ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setShowVoiceInput(false)}
-          className="flex items-center gap-2"
-        >
-          <Edit3 className="h-4 w-4" />
-          手动填写
-        </Button>
+      {/* 语音输入区域 */}
+      <div className="rounded-lg border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-4">
+        <TripVoiceInput onParsed={handleVoiceParsed} disabled={isSubmitting} />
       </div>
 
-      {/* 语音输入 */}
-      {showVoiceInput && (
-        <TripVoiceInput onParsed={handleVoiceParsed} disabled={isSubmitting} />
-      )}
+      {/* 分隔提示 */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-300"></div>
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="bg-white px-4 text-gray-500">
+            或手动填写下方表单
+          </span>
+        </div>
+      </div>
 
       {/* 表单卡片 */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            {showVoiceInput ? '确认行程信息' : '创建新行程'}
-          </CardTitle>
-          <CardDescription>
-            {showVoiceInput
-              ? '请检查并补充语音识别的信息'
-              : '填写基本信息，稍后您可以使用 AI 助手生成详细的行程安排'}
-          </CardDescription>
+          <CardTitle>行程信息</CardTitle>
+          <CardDescription>请填写或确认行程基本信息</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Destination */}

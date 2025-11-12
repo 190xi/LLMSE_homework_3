@@ -24,7 +24,10 @@ import {
   Loader2,
   Clock,
   MapPinIcon,
+  Plus,
+  ArrowRight,
 } from 'lucide-react';
+import type { Expense, ExpenseStats } from '@/types/expense';
 
 interface ItineraryDay {
   day: number;
@@ -66,6 +69,11 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
   const [error, setError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
 
+  // 费用相关状态
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenseStats, setExpenseStats] = useState<ExpenseStats | null>(null);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
@@ -75,6 +83,7 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (status === 'authenticated') {
       fetchTrip();
+      fetchExpenses();
     }
   }, [status, params.id]);
 
@@ -94,6 +103,32 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
       setError(err instanceof Error ? err.message : '获取行程详情失败');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchExpenses = async () => {
+    try {
+      setIsLoadingExpenses(true);
+
+      // 并行加载费用列表和统计数据
+      const [expensesRes, statsRes] = await Promise.all([
+        fetch(`/api/trips/${params.id}/expenses`),
+        fetch(`/api/trips/${params.id}/expenses/stats`),
+      ]);
+
+      if (expensesRes.ok) {
+        const expensesData = await expensesRes.json();
+        setExpenses(expensesData.expenses || []);
+      }
+
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setExpenseStats(statsData.stats);
+      }
+    } catch (err) {
+      console.error('Error fetching expenses:', err);
+    } finally {
+      setIsLoadingExpenses(false);
     }
   };
 
@@ -395,25 +430,142 @@ export default function TripDetailPage({ params }: { params: { id: string } }) {
             {/* Expenses Section */}
             <Card>
               <CardHeader>
-                <CardTitle>费用记录</CardTitle>
-                <CardDescription>记录和管理旅行花费</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="mb-4 rounded-full bg-green-100 p-6">
-                    <DollarSign className="h-12 w-12 text-green-600" />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>费用记录</CardTitle>
+                    <CardDescription>记录和管理旅行花费</CardDescription>
                   </div>
-                  <h3 className="mb-2 text-xl font-semibold text-gray-900">
-                    还没有费用记录
-                  </h3>
-                  <p className="mb-6 max-w-md text-gray-600">
-                    开始记录您的旅行花费，轻松掌控预算
-                  </p>
-                  <Button size="lg" variant="outline">
-                    <DollarSign className="mr-2 h-5 w-5" />
-                    添加费用
+                  <Button size="sm" asChild>
+                    <Link href={`/trips/${params.id}/expenses`}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      添加费用
+                    </Link>
                   </Button>
                 </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingExpenses ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                  </div>
+                ) : expenseStats && expenseStats.expense_count > 0 ? (
+                  <div className="space-y-4">
+                    {/* 预算统计 */}
+                    <div className="rounded-lg bg-gradient-to-r from-indigo-50 to-purple-50 p-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm text-gray-600">总预算</p>
+                          <p className="text-2xl font-bold text-gray-900">
+                            ¥{trip?.total_budget.toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">已花费</p>
+                          <p className="text-2xl font-bold text-indigo-600">
+                            ¥{expenseStats.total_spent.toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">剩余预算</p>
+                          <p
+                            className={`text-xl font-semibold ${
+                              expenseStats.remaining_budget >= 0
+                                ? 'text-green-600'
+                                : 'text-red-600'
+                            }`}
+                          >
+                            ¥{expenseStats.remaining_budget.toLocaleString()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">预算使用</p>
+                          <p className="text-xl font-semibold text-gray-700">
+                            {expenseStats.budget_usage_percentage.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* 预算进度条 */}
+                      <div className="mt-4">
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className={`h-full transition-all ${
+                              expenseStats.budget_usage_percentage > 100
+                                ? 'bg-red-500'
+                                : expenseStats.budget_usage_percentage > 80
+                                  ? 'bg-yellow-500'
+                                  : 'bg-green-500'
+                            }`}
+                            style={{
+                              width: `${Math.min(expenseStats.budget_usage_percentage, 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 最近费用记录 */}
+                    <div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h4 className="font-semibold text-gray-900">
+                          最近记录 ({expenseStats.expense_count} 条)
+                        </h4>
+                      </div>
+                      <div className="space-y-2">
+                        {expenses.slice(0, 3).map((expense) => (
+                          <div
+                            key={expense.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-200 p-3"
+                          >
+                            <div className="flex-1">
+                              <p className="font-medium text-gray-900">
+                                {expense.description || '未分类'}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {new Date(
+                                  expense.recorded_at
+                                ).toLocaleDateString('zh-CN')}
+                              </p>
+                            </div>
+                            <p className="text-lg font-semibold text-gray-900">
+                              ¥{expense.amount.toLocaleString()}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 查看全部按钮 */}
+                    <Button variant="outline" className="w-full" asChild>
+                      <Link
+                        href={`/trips/${params.id}/expenses`}
+                        className="flex items-center justify-center"
+                      >
+                        查看全部费用记录
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                ) : (
+                  // 空状态
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="mb-4 rounded-full bg-green-100 p-6">
+                      <DollarSign className="h-12 w-12 text-green-600" />
+                    </div>
+                    <h3 className="mb-2 text-xl font-semibold text-gray-900">
+                      还没有费用记录
+                    </h3>
+                    <p className="mb-6 max-w-md text-gray-600">
+                      开始记录您的旅行花费，轻松掌控预算
+                    </p>
+                    <Button size="lg" variant="outline" asChild>
+                      <Link href={`/trips/${params.id}/expenses`}>
+                        <Plus className="mr-2 h-5 w-5" />
+                        添加费用
+                      </Link>
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

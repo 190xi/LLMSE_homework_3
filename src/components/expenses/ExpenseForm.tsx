@@ -13,6 +13,8 @@ import {
   Currency,
   CurrencyNames,
 } from '@/types/expense';
+import { ExpenseVoiceInput } from './ExpenseVoiceInput';
+import type { VoiceExpenseParseResult } from '@/types/expense-voice';
 
 // 从 createExpenseSchema 创建表单类型（不包含 tripId，因为会从 props 传入）
 const formSchema = z.object({
@@ -46,6 +48,7 @@ export function ExpenseForm({ tripId, onSuccess, onCancel }: ExpenseFormProps) {
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -55,6 +58,22 @@ export function ExpenseForm({ tripId, onSuccess, onCancel }: ExpenseFormProps) {
       description: '',
     },
   });
+
+  // 处理语音解析结果
+  const handleExpenseParsed = (result: VoiceExpenseParseResult) => {
+    if (result.amount) {
+      setValue('amount', result.amount);
+    }
+    if (result.category) {
+      setValue('category', result.category);
+    }
+    if (result.description) {
+      setValue('description', result.description);
+    }
+    if (result.currency) {
+      setValue('currency', result.currency);
+    }
+  };
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
@@ -109,7 +128,24 @@ export function ExpenseForm({ tripId, onSuccess, onCancel }: ExpenseFormProps) {
   ];
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* 语音输入区域 */}
+      <div className="rounded-lg border-2 border-dashed border-indigo-200 bg-indigo-50/50 p-4">
+        <ExpenseVoiceInput onParsed={handleExpenseParsed} />
+      </div>
+
+      {/* 分隔提示 */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-300"></div>
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="bg-white px-4 text-gray-500">
+            或手动填写下方表单
+          </span>
+        </div>
+      </div>
+
       {/* 金额和货币 */}
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2 space-y-2">

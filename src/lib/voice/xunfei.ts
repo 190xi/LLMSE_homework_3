@@ -36,6 +36,7 @@ export class XunfeiRecognizer {
       audioEncoding: 'raw',
       sampleRate: '16000',
       ptt: 1, // 返回标点符号
+      vinfo: 1, // 开启流式返回，减少延迟
       ...params,
     };
   }
@@ -318,9 +319,12 @@ export class XunfeiRecognizer {
         language: this.params.language,
         domain: this.params.domain,
         accent: 'mandarin', // 普通话
-        vad_eos: 5000, // 后端点检测超时时间
+        vad_eos: 1500, // 后端点检测超时时间 (从5000ms降低到1500ms，提升响应速度)
         dwa: 'wpgs', // 动态修正
         ptt: this.params.ptt, // 标点符号
+        pd: 'travel', // 领域：旅游场景，提高识别准确度
+        rlang: 'zh-cn', // 原始音频语言
+        nunum: 1, // 将数字转为阿拉伯数字
       },
       data: {
         status: 0, // 0: 第一帧
