@@ -41,6 +41,13 @@ export interface ItineraryDay {
     time: string;
     activity: string;
     location: string;
+    // 新增：地理坐标信息
+    coordinates?: {
+      lng: number; // 经度
+      lat: number; // 纬度
+    };
+    // 新增：完整地址（包含城市）
+    fullAddress?: string;
     description: string;
     estimatedCost?: number;
     duration?: string;
@@ -110,7 +117,12 @@ ${preferences?.customPreferences ? `其他特殊需求或偏好：${preferences.
         {
           "time": "09:00",
           "activity": "活动名称",
-          "location": "具体地点",
+          "location": "地点名称（如：夫子庙）",
+          "fullAddress": "完整地址，包含城市和区（如：江苏省南京市秦淮区贡院街152号）",
+          "coordinates": {
+            "lng": 118.794,
+            "lat": 32.053
+          },
           "description": "活动详细描述",
           "estimatedCost": 100,
           "duration": "2小时"
@@ -137,6 +149,9 @@ ${preferences?.customPreferences ? `其他特殊需求或偏好：${preferences.
 4. 提供具体的时间安排
 5. 预算分配要详细且合理
 6. 提供3-5条实用的旅行建议
+7. **重要：每个地点必须提供精确的地理坐标（经纬度），使用高德地图坐标系（GCJ-02）**
+8. **重要：提供完整的地址，格式为"省市区+街道+门牌号"或"城市+地标名称"**
+9. 对于跨城市旅行，确保每个地点的fullAddress都包含正确的城市名称
 
 请直接返回JSON，不要包含其他说明文字。`;
 
