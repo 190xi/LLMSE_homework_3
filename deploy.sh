@@ -8,7 +8,13 @@ echo "🚀 Starting deployment..."
 # Configuration
 APP_NAME="ai-travel-planner"
 DEPLOY_DIR="$HOME/deploy/${APP_NAME}"
-BACKUP_DIR="$HOME/deploy/${APP_NAME}_backup_$(date +%Y%m%d_%H%M%S)"
+
+# Check if IMAGE_TAG is provided
+if [ -z "$IMAGE_TAG" ]; then
+    echo "❌ ERROR: IMAGE_TAG environment variable is not set"
+    echo "Usage: IMAGE_TAG=ghcr.io/user/repo:tag ./deploy.sh"
+    exit 1
+fi
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -29,79 +35,63 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Create deployment directory if it doesn't exist
-if [ ! -d "$DEPLOY_DIR" ]; then
-    print_status "Creating deployment directory: $DEPLOY_DIR"
-    mkdir -p "$DEPLOY_DIR"
-fi
-
+# Ensure we're in the deployment directory
 cd "$DEPLOY_DIR"
 
-# Backup current deployment if exists
-if [ -f "docker-compose.yml" ]; then
-    print_status "Backing up current deployment to: $BACKUP_DIR"
-    mkdir -p "$BACKUP_DIR"
-    cp -r "$DEPLOY_DIR" "$BACKUP_DIR/"
+print_status "Deploying image: $IMAGE_TAG"
+
+# Pull the latest image
+print_status "Pulling Docker image..."
+if ! docker pull "$IMAGE_TAG"; then
+    print_error "Failed to pull Docker image: $IMAGE_TAG"
+    exit 1
 fi
 
-# Pull latest code from repository
-print_status "Pulling latest code..."
-if [ -d ".git" ]; then
-    git pull origin main
-else
-    print_warning "Git repository not found. Skipping git pull."
-fi
-
-# Stop and remove existing containers
+# Stop and remove existing containers first
 print_status "Stopping existing containers..."
 if docker ps -a | grep -q "$APP_NAME"; then
     docker-compose down || true
 fi
 
-# Remove old images to save space (keep last 2)
-print_status "Cleaning up old Docker images..."
-docker images | grep "$APP_NAME" | awk '{print $3}' | tail -n +3 | xargs -r docker rmi -f || true
+# Remove old 'latest' tag to avoid using stale image
+print_status "Removing old latest tag if exists..."
+docker rmi "${APP_NAME}:latest" 2>/dev/null || true
 
-# Build new Docker image
-print_status "Building Docker image..."
-docker build -t ${APP_NAME}:latest .
+# Tag the pulled image as latest for docker-compose
+print_status "Tagging new image as latest..."
+docker tag "$IMAGE_TAG" "${APP_NAME}:latest"
 
-# Start containers
-print_status "Starting containers..."
-docker-compose up -d
+# Start containers with the new image (force recreate to ensure new image is used)
+print_status "Starting containers with new image..."
+docker-compose up -d --force-recreate
 
-# Wait for health check
-print_status "Waiting for application to be healthy..."
-sleep 10
+# Wait for container to start
+print_status "Waiting for container to start..."
+sleep 5
 
 # Check if container is running
 if docker ps | grep -q "$APP_NAME"; then
     print_status "✅ Deployment successful!"
     print_status "Application is running at: http://localhost:3000"
 
-    # Show container status
-    docker ps | grep "$APP_NAME"
+    # Show container info
+    print_status "Container info:"
+    docker ps --filter "name=$APP_NAME" --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
-    # Show logs
+    # Show recent logs
     print_status "Recent logs:"
     docker logs --tail 20 "$APP_NAME"
 else
     print_error "❌ Deployment failed! Container is not running."
     print_error "Checking logs..."
     docker logs "$APP_NAME" || true
-
-    # Rollback to backup
-    if [ -d "$BACKUP_DIR" ]; then
-        print_warning "Attempting to rollback..."
-        cd "$BACKUP_DIR/$APP_NAME"
-        docker-compose up -d
-    fi
-
     exit 1
 fi
 
-# Clean up old backups (keep last 5)
-print_status "Cleaning up old backups..."
-ls -dt $HOME/deploy/${APP_NAME}_backup_* 2>/dev/null | tail -n +6 | xargs -r rm -rf
+# Clean up old images (keep last 3 versions)
+print_status "Cleaning up old Docker images..."
+docker images "ghcr.io/*/${APP_NAME}" --format "{{.ID}}" | tail -n +4 | xargs -r docker rmi -f || true
+docker images "${APP_NAME}" --format "{{.ID}}" | tail -n +4 | xargs -r docker rmi -f || true
 
 print_status "🎉 Deployment completed successfully!"
+print_status "Deployed image: $IMAGE_TAG"
