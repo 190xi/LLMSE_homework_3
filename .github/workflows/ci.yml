@@ -96,6 +96,7 @@ jobs:
             NEXT_PUBLIC_XUNFEI_API_SECRET=${{ secrets.NEXT_PUBLIC_XUNFEI_API_SECRET }}
             NEXT_PUBLIC_AMAP_KEY=${{ secrets.NEXT_PUBLIC_AMAP_KEY }}
             NEXT_PUBLIC_AMAP_SECRET=${{ secrets.NEXT_PUBLIC_AMAP_SECRET }}
+            DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}
 
       - name: Set deployment tag
         id: deploy-tag

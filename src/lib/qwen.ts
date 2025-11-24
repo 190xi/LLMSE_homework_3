@@ -42,8 +42,15 @@ export function createQwenClient() {
   });
 }
 
-// 创建一个全局客户端实例供复用
-export const qwenClient = createQwenClient();
+// 懒加载客户端实例，避免在构建时初始化
+let qwenClientInstance: OpenAI | null = null;
+
+export function getQwenClient(): OpenAI {
+  if (!qwenClientInstance) {
+    qwenClientInstance = createQwenClient();
+  }
+  return qwenClientInstance;
+}
 
 /**
  * 调用阿里云通义千问API
@@ -56,7 +63,8 @@ export async function callQwenAPI(
   model: 'qwen-turbo' | 'qwen-plus' | 'qwen-max' = 'qwen-plus'
 ): Promise<string> {
   try {
-    const response = await qwenClient.chat.completions.create({
+    const client = getQwenClient();
+    const response = await client.chat.completions.create({
       model: model,
       messages: messages,
     });

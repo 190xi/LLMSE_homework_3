@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { qwenClient } from '@/lib/qwen';
+import { getQwenClient } from '@/lib/qwen';
 import type { VoiceTripParseResult } from '@/types/trip-voice';
 
 /**
@@ -61,6 +61,7 @@ ${text}
 }
 \`\`\``;
 
+    const qwenClient = getQwenClient();
     const completion = await qwenClient.chat.completions.create({
       model: 'qwen-plus',
       messages: [{ role: 'user', content: prompt }],

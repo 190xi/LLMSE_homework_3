@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { qwenClient } from '@/lib/qwen';
+import { getQwenClient } from '@/lib/qwen';
 import type { VoiceExpenseParseResult } from '@/types/expense-voice';
 
 /**
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
 
 只返回JSON，不要任何其他文字。`;
 
+    const qwenClient = getQwenClient();
     const completion = await qwenClient.chat.completions.create({
       model: 'qwen-plus',
       messages: [
